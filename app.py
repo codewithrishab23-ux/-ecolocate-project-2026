@@ -4,6 +4,7 @@ Phase 2-5: Flask Application with MySQL Integration, Geospatial Search & Interac
 Features: User & Admin Authentication, Werkzeug Hashing, Sessions, CSRF, Haversine Nearest Search, Leaflet.js APIs.
 """
 
+import os
 import math
 import re
 from functools import wraps
@@ -867,4 +868,6 @@ def health_check():
     }), (200 if is_healthy else 500)
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_DEBUG', '1').lower() in ('1', 'true')
+    app.run(host='0.0.0.0', port=port, debug=debug)

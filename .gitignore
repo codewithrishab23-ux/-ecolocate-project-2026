@@ -25,12 +25,24 @@ wheels/
 
 # Environment variables & secrets
 .env
-.env.local
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
 
-# Database local dumps
+# Database local dumps & point-in-time backups
 *.sqlite3
 *.db
 local_dump.sql
+data/backups/*.json
+!data/backups/.gitkeep
+
+# Logs & temporary metrics
+*.log
+locust_results*
+.coverage
+htmlcov/
 
 # IDE & OS files
 .vscode/
