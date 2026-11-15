@@ -14,7 +14,7 @@ from flask import (
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import Config
-from db import execute_query, check_db_health
+from db import execute_query, check_db_health, log_user_activity
 
 # Initialize Flask application
 app = Flask(__name__)
@@ -279,6 +279,17 @@ def api_centres():
 
         total_pages = (total + limit - 1) // limit if total > 0 else 1
 
+        # Track user search activity (first page query execution)
+        if page == 1 and (q or state or city or device_id_raw):
+            uid = session.get('user_id')
+            log_user_activity(
+                user_id=uid,
+                activity_type='search',
+                search_query=q or (f"Device ID: {device_id_raw}" if device_id_raw else None),
+                city=city or None,
+                state=state or None
+            )
+
         return jsonify({
             'success': True,
             'total': total,
@@ -410,6 +421,16 @@ def api_centres_nearby():
         else:
             result_list = nearby_list
 
+        # Track user proximity search activity
+        uid = session.get('user_id')
+        log_user_activity(
+            user_id=uid,
+            activity_type='search',
+            search_query=f"Proximity Search ({round(user_lat, 3)}, {round(user_lng, 3)})",
+            city=result_list[0].get('city') if result_list else None,
+            state=result_list[0].get('state') if result_list else None
+        )
+
         return jsonify({
             'success': True,
             'user_location': {
@@ -449,6 +470,17 @@ def api_centre_detail(centre_id):
         centre = execute_query(detail_sql, (centre_id,), fetchone=True)
         if not centre:
             return jsonify({'success': False, 'error': 'Facility not found'}), 404
+
+        # Track centre view activity
+        uid = session.get('user_id')
+        log_user_activity(
+            user_id=uid,
+            activity_type='centre_view',
+            centre_id=centre_id,
+            city=centre.get('city'),
+            state=centre.get('state'),
+            search_query=centre.get('centre_name')
+        )
 
         return jsonify({'success': True, 'centre': centre})
     except Exception as e:
@@ -551,6 +583,14 @@ def api_calculate_rewards():
         # Illustrative estimated environmental metrics based on device type
         est_co2_kg = round(quantity * (points_per_unit * 0.12), 1)
         est_materials_g = round(quantity * (points_per_unit * 0.25), 1)
+
+        # Track rewards calculation activity
+        uid = session.get('user_id')
+        log_user_activity(
+            user_id=uid,
+            activity_type='rewards_calc',
+            search_query=f"{quantity}x {device['device_name']} ({total_points} pts)"
+        )
 
         return jsonify({
             'success': True,
@@ -802,6 +842,9 @@ def login():
                 session['user_email'] = user['email']
                 session.permanent = True
 
+                # Track user login activity
+                log_user_activity(user_id=user['id'], activity_type='login')
+
                 flash(f'Welcome back, {user["full_name"]}!', 'success')
                 
                 next_page = request.args.get('next')
@@ -822,7 +865,9 @@ def login():
 @app.route('/logout')
 def logout():
     """Log out standard user and terminate session."""
-    user_name = session.get('user_name', 'User')
+    user_id = session.get('user_id')
+    if user_id:
+        log_user_activity(user_id=user_id, activity_type='logout')
     session.pop('user_id', None)
     session.pop('user_name', None)
     session.pop('user_email', None)

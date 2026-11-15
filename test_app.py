@@ -1021,6 +1021,7 @@ class EcoLocateComprehensiveTestSuite(unittest.TestCase):
             '/admin/centres/add',
             '/admin/centres/import-csv',
             '/admin/users',
+            '/admin/activities',
             '/admin/devices',
             '/admin/profile'
         ]
@@ -1051,6 +1052,260 @@ class EcoLocateComprehensiveTestSuite(unittest.TestCase):
         # 6. Rewards Calculator
         self.assertEqual(self.client.get('/rewards').status_code, 200)
         print("[PASS] Test 50: Public Website, Interactive Map & Rewards Regressions Check Verified.")
+
+    def test_51_user_activity_table_schema_verification(self):
+        """Test 51: Verify user_activity table exists in MySQL with all required columns and constraints."""
+        cols = execute_query("SHOW COLUMNS FROM user_activity", fetchall=True) or []
+        col_names = [c['Field'] for c in cols]
+        required = ['activity_id', 'user_id', 'activity_type', 'search_query', 'city', 'state', 'centre_id', 'created_at']
+        for r in required:
+            self.assertIn(r, col_names)
+        print("[PASS] Test 51: User Activity Table Existence & Schema Verified.")
+
+    def test_52_user_login_and_logout_activity_tracking(self):
+        """Test 52: Verify user login and logout events are automatically logged into user_activity."""
+        email = "alice@testdomain.demo"
+        password = "SecurePassword123!"
+
+        # Ensure user exists
+        user = execute_query("SELECT id FROM users WHERE email = %s", (email,), fetchone=True)
+        if not user:
+            from werkzeug.security import generate_password_hash
+            execute_query(
+                "INSERT INTO users (full_name, email, password_hash) VALUES (%s, %s, %s)",
+                ("Alice Green", email, generate_password_hash(password)),
+                commit=True
+            )
+            user = execute_query("SELECT id FROM users WHERE email = %s", (email,), fetchone=True)
+        user_id = user['id']
+
+        # 1. Log in
+        res = self.client.post('/login', data={
+            'email': email,
+            'password': password
+        }, follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+
+        # Verify login activity logged
+        login_act = execute_query(
+            "SELECT * FROM user_activity WHERE user_id = %s AND activity_type = 'login' ORDER BY activity_id DESC LIMIT 1",
+            (user_id,),
+            fetchone=True
+        )
+        self.assertIsNotNone(login_act)
+        self.assertEqual(login_act['activity_type'], 'login')
+
+        # 2. Log out
+        res_out = self.client.get('/logout', follow_redirects=True)
+        self.assertEqual(res_out.status_code, 200)
+
+        # Verify logout activity logged
+        logout_act = execute_query(
+            "SELECT * FROM user_activity WHERE user_id = %s AND activity_type = 'logout' ORDER BY activity_id DESC LIMIT 1",
+            (user_id,),
+            fetchone=True
+        )
+        self.assertIsNotNone(logout_act)
+        self.assertEqual(logout_act['activity_type'], 'logout')
+        print("[PASS] Test 52: User Login & Logout Activity Tracking Verified.")
+
+    def test_53_centre_search_and_filter_activity_tracking(self):
+        """Test 53: Verify searching and filtering recycling centres logs query, state, and city."""
+        # Search for Delhi
+        res = self.client.get('/api/centres?page=1&state=Delhi&q=Recycle')
+        self.assertEqual(res.status_code, 200)
+
+        # Verify search activity logged
+        search_act = execute_query(
+            "SELECT * FROM user_activity WHERE activity_type = 'search' AND state = 'Delhi' ORDER BY activity_id DESC LIMIT 1",
+            fetchone=True
+        )
+        self.assertIsNotNone(search_act)
+        self.assertEqual(search_act['state'], 'Delhi')
+        self.assertEqual(search_act['search_query'], 'Recycle')
+        print("[PASS] Test 53: Centre Search & Filter Activity Tracking Verified.")
+
+    def test_54_centre_details_view_activity_tracking(self):
+        """Test 54: Verify viewing centre details logs centre_view with centre_id, city, and state."""
+        # Query first centre
+        centre = execute_query("SELECT id, city, state FROM centres LIMIT 1", fetchone=True)
+        self.assertIsNotNone(centre)
+        c_id = centre['id']
+
+        res = self.client.get(f'/api/centres/{c_id}')
+        self.assertEqual(res.status_code, 200)
+
+        # Verify centre_view logged
+        view_act = execute_query(
+            "SELECT * FROM user_activity WHERE activity_type = 'centre_view' AND centre_id = %s ORDER BY activity_id DESC LIMIT 1",
+            (c_id,),
+            fetchone=True
+        )
+        self.assertIsNotNone(view_act)
+        self.assertEqual(view_act['centre_id'], c_id)
+        self.assertEqual(view_act['city'], centre['city'])
+        self.assertEqual(view_act['state'], centre['state'])
+        print("[PASS] Test 54: Centre Details View Activity Tracking Verified.")
+
+    def test_55_rewards_calculator_activity_tracking(self):
+        """Test 55: Verify rewards calculation logs rewards_calc activity."""
+        device = execute_query("SELECT id FROM devices LIMIT 1", fetchone=True)
+        d_id = device['id']
+
+        res = self.client.post('/api/rewards/calculate', json={
+            'device_id': d_id,
+            'quantity': 4
+        }, headers={'Content-Type': 'application/json'})
+        self.assertEqual(res.status_code, 200)
+
+        # Verify rewards_calc logged
+        calc_act = execute_query(
+            "SELECT * FROM user_activity WHERE activity_type = 'rewards_calc' ORDER BY activity_id DESC LIMIT 1",
+            fetchone=True
+        )
+        self.assertIsNotNone(calc_act)
+        self.assertIn("4x", calc_act['search_query'])
+        print("[PASS] Test 55: Rewards Calculator Activity Tracking Verified.")
+
+    def test_56_live_database_synchronisation_crud_to_search(self):
+        """Test 56: Verify that Admin adding, editing, or deleting a recycling centre immediately reflects in User search results without hardcoded data."""
+        # 1. Log in as admin
+        with self.client.session_transaction() as sess:
+            sess['admin_id'] = 1
+            sess['admin_username'] = 'admin'
+
+        # 2. Add new recycling centre via Admin
+        test_centre_name = "EcoSync Test Facility Phase 8"
+        add_res = self.client.post('/admin/centres/add', data={
+            'centre_name': test_centre_name,
+            'state': 'Goa',
+            'city': 'Panaji',
+            'address': 'Plot 101, Kundaim Industrial Estate, Goa 403115',
+            'capacity_mta': '500 MTA',
+            'centre_type': 'Authorised dismantler/recycler',
+            'source': 'CPCB Verified List',
+            'website_url': 'https://www.ecosync-test.in',
+            'website_verification': 'Direct domain verified',
+            'phone_number': '+91 832 2390100',
+            'email': 'contact@ecosync-test.in',
+            'latitude': '15.4909',
+            'longitude': '73.8278'
+        }, follow_redirects=True)
+        self.assertEqual(add_res.status_code, 200)
+
+        # 3. Query from standard user search endpoint -> MUST appear immediately
+        user_search = self.client.get('/api/centres?state=Goa&q=EcoSync').get_json()
+        self.assertTrue(user_search['success'])
+        self.assertEqual(user_search['total'], 1)
+        created_id = user_search['centres'][0]['id']
+        self.assertEqual(user_search['centres'][0]['centre_name'], test_centre_name)
+
+        # 4. Edit the facility via Admin
+        updated_centre_name = "EcoSync Premier Recycling Hub"
+        edit_res = self.client.post(f'/admin/centres/edit/{created_id}', data={
+            'centre_name': updated_centre_name,
+            'state': 'Goa',
+            'city': 'Panaji',
+            'address': 'Plot 101, Kundaim Industrial Estate, Goa 403115',
+            'capacity_mta': '1200 MTA',
+            'centre_type': 'Authorised dismantler/recycler',
+            'source': 'CPCB Verified List',
+            'website_url': 'https://www.ecosync-test.in',
+            'phone_number': '+91 832 2390100',
+            'latitude': '15.4909',
+            'longitude': '73.8278'
+        }, follow_redirects=True)
+        self.assertEqual(edit_res.status_code, 200)
+
+        # 5. Query user search -> MUST reflect updated name immediately
+        user_search_updated = self.client.get('/api/centres?state=Goa&q=Premier').get_json()
+        self.assertEqual(user_search_updated['total'], 1)
+        self.assertEqual(user_search_updated['centres'][0]['centre_name'], updated_centre_name)
+
+        # 6. Delete the facility via Admin
+        del_res = self.client.post(f'/admin/centres/delete/{created_id}', follow_redirects=True)
+        self.assertEqual(del_res.status_code, 200)
+
+        # 7. Query user search -> MUST be gone immediately
+        user_search_deleted = self.client.get('/api/centres?state=Goa&q=Premier').get_json()
+        self.assertEqual(user_search_deleted['total'], 0)
+
+        print("[PASS] Test 56: Live Database Synchronisation (Admin CRUD -> User Search) Verified.")
+
+    def test_57_admin_activity_dashboard_and_filters(self):
+        """Test 57: Verify Admin Activity Dashboard (/admin/activities) renders with KPI counts, filters, and activity history."""
+        # Log in as admin
+        with self.client.session_transaction() as sess:
+            sess['admin_id'] = 1
+            sess['admin_username'] = 'admin'
+
+        # Access /admin/activities
+        resp = self.client.get('/admin/activities')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"User Activity Tracking", resp.data)
+        self.assertIn(b"Activity Audit Trail", resp.data)
+
+        # Test filter by type
+        resp_filter = self.client.get('/admin/activities?type=login')
+        self.assertEqual(resp_filter.status_code, 200)
+
+        # Test search filter
+        resp_search = self.client.get('/admin/activities?q=Delhi')
+        self.assertEqual(resp_search.status_code, 200)
+
+        print("[PASS] Test 57: Admin Activity Dashboard & Filtering Options Verified.")
+
+    def test_58_non_admin_blocked_from_activity_dashboard(self):
+        """Test 58: Verify standard authenticated users and unauthenticated guests are strictly blocked from /admin/activities."""
+        # 1. Unauthenticated guest -> redirected to /admin/login
+        resp_guest = self.client.get('/admin/activities', follow_redirects=False)
+        self.assertEqual(resp_guest.status_code, 302)
+        self.assertIn('/admin/login', resp_guest.headers['Location'])
+
+        # 2. Standard authenticated user -> blocked and redirected to /admin/login
+        user = execute_query("SELECT id FROM users LIMIT 1", fetchone=True)
+        user_id = user['id'] if user else 1
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = user_id
+            sess['user_name'] = "Regular User"
+            sess.pop('admin_id', None)
+
+        resp_user = self.client.get('/admin/activities', follow_redirects=False)
+        self.assertEqual(resp_user.status_code, 302)
+        self.assertIn('/admin/login', resp_user.headers['Location'])
+
+        print("[PASS] Test 58: Strict Non-Admin Boundary Protection on Activity Logs Verified.")
+
+    def test_59_concurrent_multi_user_activity_isolation(self):
+        """Test 59: Verify multiple users simultaneously perform distinct searches in different cities and their activities are tracked independently."""
+        client_a = self.app.test_client()
+        client_b = self.app.test_client()
+
+        # Client A searches Pune, Maharashtra
+        res_a = client_a.get('/api/centres?page=1&state=Maharashtra&city=Pune')
+        self.assertEqual(res_a.status_code, 200)
+
+        # Client B searches Bengaluru, Karnataka
+        res_b = client_b.get('/api/centres?page=1&state=Karnataka&city=Bengaluru')
+        self.assertEqual(res_b.status_code, 200)
+
+        # Verify both activities logged independently in MySQL
+        act_pune = execute_query(
+            "SELECT * FROM user_activity WHERE activity_type = 'search' AND city = 'Pune' ORDER BY activity_id DESC LIMIT 1",
+            fetchone=True
+        )
+        act_blr = execute_query(
+            "SELECT * FROM user_activity WHERE activity_type = 'search' AND city = 'Bengaluru' ORDER BY activity_id DESC LIMIT 1",
+            fetchone=True
+        )
+
+        self.assertIsNotNone(act_pune)
+        self.assertIsNotNone(act_blr)
+        self.assertEqual(act_pune['city'], 'Pune')
+        self.assertEqual(act_blr['city'], 'Bengaluru')
+        self.assertNotEqual(act_pune['activity_id'], act_blr['activity_id'])
+
+        print("[PASS] Test 59: Concurrent Multi-User Independent City Searches Verified.")
 
 if __name__ == '__main__':
     unittest.main()

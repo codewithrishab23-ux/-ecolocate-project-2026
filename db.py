@@ -30,7 +30,7 @@ def get_db_pool():
                     'database': Config.DB_NAME,
                     'charset': 'utf8mb4',
                     'collation': 'utf8mb4_unicode_ci',
-                    'autocommit': False,
+                    'autocommit': True,
                     'connect_timeout': 10
                 }
                 
@@ -69,7 +69,7 @@ def get_db_connection():
             'database': Config.DB_NAME,
             'charset': 'utf8mb4',
             'collation': 'utf8mb4_unicode_ci',
-            'autocommit': False,
+            'autocommit': True,
             'connect_timeout': 10
         }
         if Config.DB_SSL_CA:
@@ -144,3 +144,33 @@ def check_db_health():
     except Exception as e:
         return False, str(e)
     return False, "Database connection failed."
+
+def log_user_activity(user_id=None, activity_type='search', search_query=None, city=None, state=None, centre_id=None):
+    """
+    Record user activity into the user_activity table in MySQL.
+    
+    Privacy Safeguard:
+    Never records passwords, authentication tokens, session cookies,
+    or sensitive personal information.
+    """
+    try:
+        s_query = str(search_query).strip()[:255] if search_query else None
+        c_city = str(city).strip()[:100] if city else None
+        s_state = str(state).strip()[:100] if state else None
+        c_id = int(centre_id) if centre_id else None
+        u_id = int(user_id) if user_id else None
+        act_type = str(activity_type).strip()[:50]
+
+        execute_query(
+            """
+            INSERT INTO user_activity (user_id, activity_type, search_query, city, state, centre_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (u_id, act_type, s_query, c_city, s_state, c_id),
+            commit=True
+        )
+        return True
+    except Exception as e:
+        # Non-blocking advisory logging
+        print(f"[Activity Logging Advisory] {e}")
+        return False

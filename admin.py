@@ -204,6 +204,35 @@ def register_admin_routes(app):
                 fetchall=True
             ) or []
 
+            # User Activity Metrics
+            logins_row = execute_query("SELECT COUNT(*) AS total FROM user_activity WHERE activity_type = 'login'", fetchone=True) or {}
+            searches_row = execute_query("SELECT COUNT(*) AS total FROM user_activity WHERE activity_type = 'search'", fetchone=True) or {}
+            views_row = execute_query("SELECT COUNT(*) AS total FROM user_activity WHERE activity_type = 'centre_view'", fetchone=True) or {}
+            rewards_act_row = execute_query("SELECT COUNT(*) AS total FROM user_activity WHERE activity_type = 'rewards_calc'", fetchone=True) or {}
+
+            # Recent 8 user activities
+            recent_activities = execute_query("""
+                SELECT ua.activity_id, ua.user_id, ua.activity_type, ua.search_query, ua.city, ua.state,
+                       ua.centre_id, ua.created_at, u.full_name AS user_name, u.email AS user_email,
+                       c.centre_name
+                FROM user_activity ua
+                LEFT JOIN users u ON ua.user_id = u.id
+                LEFT JOIN centres c ON ua.centre_id = c.id
+                ORDER BY ua.activity_id DESC
+                LIMIT 8
+            """, fetchall=True) or []
+
+            # Recently active users
+            recently_active_users = execute_query("""
+                SELECT u.id, u.full_name, u.email, MAX(ua.created_at) AS last_active,
+                       COUNT(ua.activity_id) AS total_events
+                FROM users u
+                JOIN user_activity ua ON u.id = ua.user_id
+                GROUP BY u.id, u.full_name, u.email
+                ORDER BY last_active DESC
+                LIMIT 5
+            """, fetchall=True) or []
+
             return render_template(
                 'admin_dashboard.html',
                 centre_count=int(centre_row['total'] or 0),
@@ -217,7 +246,13 @@ def register_admin_routes(app):
                 state_labels=state_labels,
                 state_counts=state_counts,
                 recent_centres=recent_centres,
-                recent_users=recent_users
+                recent_users=recent_users,
+                total_logins=int(logins_row.get('total') or 0),
+                total_searches=int(searches_row.get('total') or 0),
+                total_views=int(views_row.get('total') or 0),
+                total_rewards=int(rewards_act_row.get('total') or 0),
+                recent_activities=recent_activities,
+                recently_active_users=recently_active_users
             )
         except Exception as e:
             app.logger.error(f"Error loading admin dashboard: {e}")
@@ -227,7 +262,9 @@ def register_admin_routes(app):
                 centre_count=0, user_count=0, active_users_count=0, device_count=0,
                 website_count=0, phone_count=0, coords_count=0,
                 top_states=[], state_labels=[], state_counts=[],
-                recent_centres=[], recent_users=[]
+                recent_centres=[], recent_users=[],
+                total_logins=0, total_searches=0, total_views=0, total_rewards=0,
+                recent_activities=[], recently_active_users=[]
             )
 
     # ==========================================================================
@@ -856,3 +893,114 @@ def register_admin_routes(app):
         execute_query("DELETE FROM devices WHERE id = %s", (device_id,), commit=True)
         flash(f"Device category '{device['device_name']}' deleted.", 'success')
         return redirect(url_for('admin_devices'))
+
+    # ==========================================================================
+    # 7. User Activity Tracking & Audit Logs
+    # ==========================================================================
+
+    @app.route('/admin/activities')
+    @admin_required
+    def admin_activities():
+        """User Activity Audit Log Directory with search, multi-criteria filters, and pagination."""
+        activity_type = request.args.get('type', '').strip()
+        q = request.args.get('q', '').strip()
+        state = request.args.get('state', '').strip()
+        city = request.args.get('city', '').strip()
+
+        try:
+            page = max(1, int(request.args.get('page', 1)))
+        except (ValueError, TypeError):
+            page = 1
+        limit = 20
+        offset = (page - 1) * limit
+
+        where_clauses = ["1=1"]
+        params = []
+
+        if activity_type:
+            where_clauses.append("ua.activity_type = %s")
+            params.append(activity_type)
+
+        if state:
+            where_clauses.append("ua.state = %s")
+            params.append(state)
+
+        if city:
+            where_clauses.append("ua.city = %s")
+            params.append(city)
+
+        if q:
+            where_clauses.append("(ua.search_query LIKE %s OR ua.city LIKE %s OR ua.state LIKE %s OR u.full_name LIKE %s OR u.email LIKE %s OR c.centre_name LIKE %s)")
+            wild = f"%{q}%"
+            params.extend([wild, wild, wild, wild, wild, wild])
+
+        where_sql = " AND ".join(where_clauses)
+
+        # Total count
+        count_sql = f"""
+        SELECT COUNT(*) AS total
+        FROM user_activity ua
+        LEFT JOIN users u ON ua.user_id = u.id
+        LEFT JOIN centres c ON ua.centre_id = c.id
+        WHERE {where_sql}
+        """
+        count_res = execute_query(count_sql, tuple(params), fetchone=True)
+        total_count = count_res['total'] if count_res else 0
+
+        # Paginated data query
+        data_sql = f"""
+        SELECT ua.activity_id, ua.user_id, ua.activity_type, ua.search_query, ua.city, ua.state,
+               ua.centre_id, ua.created_at,
+               u.full_name AS user_name, u.email AS user_email,
+               c.centre_name
+        FROM user_activity ua
+        LEFT JOIN users u ON ua.user_id = u.id
+        LEFT JOIN centres c ON ua.centre_id = c.id
+        WHERE {where_sql}
+        ORDER BY ua.activity_id DESC
+        LIMIT %s OFFSET %s
+        """
+        data_params = list(params) + [limit, offset]
+        activities = execute_query(data_sql, tuple(data_params), fetchall=True) or []
+
+        total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
+
+        # Summary KPI metrics
+        user_count_row = execute_query("SELECT COUNT(*) AS total FROM users", fetchone=True)
+        login_count_row = execute_query("SELECT COUNT(*) AS total FROM user_activity WHERE activity_type = 'login'", fetchone=True)
+        search_count_row = execute_query("SELECT COUNT(*) AS total FROM user_activity WHERE activity_type = 'search'", fetchone=True)
+        view_count_row = execute_query("SELECT COUNT(*) AS total FROM user_activity WHERE activity_type = 'centre_view'", fetchone=True)
+        rewards_count_row = execute_query("SELECT COUNT(*) AS total FROM user_activity WHERE activity_type = 'rewards_calc'", fetchone=True)
+
+        # Distinct states for filter
+        states = execute_query("SELECT DISTINCT state FROM user_activity WHERE state IS NOT NULL AND TRIM(state) != '' ORDER BY state ASC", fetchall=True) or []
+
+        # Recently active users
+        recently_active_users = execute_query("""
+            SELECT u.id, u.full_name, u.email, MAX(ua.created_at) AS last_active,
+                   COUNT(ua.activity_id) AS total_events
+            FROM users u
+            JOIN user_activity ua ON u.id = ua.user_id
+            GROUP BY u.id, u.full_name, u.email
+            ORDER BY last_active DESC
+            LIMIT 5
+        """, fetchall=True) or []
+
+        return render_template(
+            'admin_activities.html',
+            activities=activities,
+            total_count=total_count,
+            page=page,
+            total_pages=total_pages,
+            activity_type=activity_type,
+            q=q,
+            selected_state=state,
+            selected_city=city,
+            states=states,
+            user_count=user_count_row['total'] if user_count_row else 0,
+            total_logins=login_count_row['total'] if login_count_row else 0,
+            total_searches=search_count_row['total'] if search_count_row else 0,
+            total_views=view_count_row['total'] if view_count_row else 0,
+            total_rewards=rewards_count_row['total'] if rewards_count_row else 0,
+            recently_active_users=recently_active_users
+        )

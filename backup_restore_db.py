@@ -14,7 +14,8 @@ TABLES_TO_BACKUP = [
     'centres',
     'devices',
     'centre_devices',
-    'rewards_history'
+    'rewards_history',
+    'user_activity'
 ]
 
 def default_json_serializer(obj):

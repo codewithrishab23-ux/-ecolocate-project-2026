@@ -84,6 +84,24 @@ CREATE TABLE IF NOT EXISTS rewards_history (
   CONSTRAINT fk_rewards_device FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 7. User Activity Tracking Table
+CREATE TABLE IF NOT EXISTS user_activity (
+  activity_id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT DEFAULT NULL,
+  activity_type VARCHAR(50) NOT NULL,
+  search_query VARCHAR(255) DEFAULT NULL,
+  city VARCHAR(100) DEFAULT NULL,
+  state VARCHAR(100) DEFAULT NULL,
+  centre_id INT DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_activity_user (user_id),
+  INDEX idx_activity_type (activity_type),
+  INDEX idx_activity_created (created_at),
+  INDEX idx_activity_state_city (state, city),
+  CONSTRAINT fk_activity_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_activity_centre FOREIGN KEY (centre_id) REFERENCES centres(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Standard Device Categories & Illustrative Points per Unit
 INSERT IGNORE INTO devices (id, device_name, points_per_unit) VALUES
 (1, 'Mobile Phones & Tablets', 150),

@@ -16,6 +16,7 @@
 | **Phase 6** | Environmental Awareness & Rewards | Heavy metals curriculum (Pb, Hg, Cd), dynamic EcoRewards calculator & history logs | **Completed** |
 | **Phase 7** | Administrative Dashboard Suite | Executive KPI dashboard, Chart.js analytics, centre CRUD, CSV batch ingestion, user moderation | **Completed** |
 | **Phase 8** | Testing, Security & Cloud Deployment | 50-user concurrency test (203+ RPS), 50 automated tests, CSP headers, connection pool, Render deployment | **Completed** |
+| **Phase 9** | User Activity Tracking & Live Sync | Non-intrusive activity logging (MySQL `user_activity`), live DB synchronization, Admin Activity Dashboard, Privacy notices | **Completed** |
 
 ---
 
@@ -61,6 +62,51 @@ Phase 8 elevates EcoLocate into a battle-tested, secure, and production-ready ap
 
 ---
 
+## 📊 Phase 9 Architecture (User Activity Tracking & Live Database Synchronisation)
+
+Phase 9 establishes continuous behavioral intelligence, instantaneous multi-tenant data synchronization, and privacy-compliant administrative oversight:
+
+### 1. Separate User and Admin Panels with Strict Boundary Controls
+- **User Interface (`/`, `/centres`, `/awareness`, `/rewards`):** Clean, consumer-oriented public workflows with personalized calculation history, interactive OpenStreetMap Leaflet maps, and certified facility searches.
+- **Admin Interface (`/admin/*`):** Isolated administrative operations suite guarded by the `@admin_required` session decorator.
+- **Strict Role Boundaries:** Verified by automated tests — normal users and guests are strictly blocked from accessing `/admin/*` or administrative activity audit logs with automatic redirection to `/admin/login`.
+
+### 2. Live Database Synchronisation
+- **Single Source of Truth:** Both user-facing search APIs and administrative management interfaces query the exact same MySQL database (`ewaste_db`).
+- **Zero Hardcoded Facilities:** All search queries, filters, and geospatial lookups execute dynamic SQL directly against the `centres` table.
+- **Instantaneous CRUD Reflection:** When an administrator adds, modifies, or de-lists a recycling centre via the admin dashboard, the update immediately appears or updates in user searches with zero cache lag or restart requirements.
+
+### 3. User Activity Tracking Engine (`user_activity`)
+- **Schema & Indexes:**
+  - `activity_id` (BIGINT AUTO_INCREMENT PRIMARY KEY)
+  - `user_id` (INT NULL, FOREIGN KEY REFERENCES `users(id)` ON DELETE SET NULL)
+  - `activity_type` (VARCHAR(50): `login`, `logout`, `search`, `centre_view`, `rewards_calc`)
+  - `search_query` (VARCHAR(255) NULL)
+  - `city` (VARCHAR(100) NULL)
+  - `state` (VARCHAR(100) NULL)
+  - `centre_id` (INT NULL, FOREIGN KEY REFERENCES `centres(id)` ON DELETE SET NULL)
+  - `created_at` (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+  - Targeted composite and foreign-key performance indexes for instant aggregation.
+- **Events Tracked:**
+  - `login` & `logout`: Tracks session creation and termination.
+  - `search`: Records search keywords, selected state, and selected city.
+  - `centre_view`: Logs facility inspection with facility ID, city, and state.
+  - `rewards_calc`: Records device category and quantity calculated.
+- **Strict Privacy Safeguards:** Passwords, password hashes, auth tokens, session IDs, and precise GPS lat/lng are **never** logged to `user_activity`.
+
+### 4. Admin User Activity Dashboard (`/admin/activities`)
+- **Executive Analytics:** Displays 5 high-impact KPI cards: Registered Users, User Logins, Facility Searches, Facility Views, and Rewards Calculations.
+- **Live Audit Trail:** Paginated audit log showing user identity (or Guest), activity type with color-coded status badges, search query context, geographic filters (state/city), and exact timestamps.
+- **Multi-Parameter Search & Filtering:** Filter activities by activity type dropdown, state filter, or keyword search.
+
+### 5. Transparent User Privacy Compliance
+- Clear, respectful privacy notices integrated across user touchpoints:
+  - Facility search toolbar (`centres.html`): Notifies users that queries and filters are recorded anonymously to improve regional coverage.
+  - Rewards calculator (`rewards.html`): Informs users that calculations are recorded for environmental impact statistics.
+  - Global footer (`base.html`): Transparency disclosure stating activity records are restricted exclusively to authorized administrators.
+
+---
+
 ## 📁 Project Folder Structure
 
 ```text
@@ -77,9 +123,10 @@ ewaste_locator/
 │
 ├── backup_restore_db.py       # Point-in-time database backup and restoration utility
 ├── optimize_db.py             # Database indexing migration script
+├── setup_user_activity.py     # User activity tracking table initialization & indexes
 ├── load_test_50_users.py      # Multi-threaded 50-user concurrency test harness
 ├── locustfile.py              # Locust load-testing script for benchmarking
-├── test_app.py                # Comprehensive 50-test automated verification suite
+├── test_app.py                # Comprehensive 59-test automated verification suite
 │
 ├── import_centres.py          # Data ingestion script for CPCB recycling centre records
 ├── update_coordinates.py      # Geospatial coordinator for verified CPCB facilities
@@ -140,8 +187,8 @@ python -m unittest discover -s ewaste_locator -p "test_app.py"
 ### Complete Test Results Breakdown:
 
 ```text
-..................................................
-Ran 50 tests in 2.010s
+...........................................................
+Ran 59 tests in 1.839s
 
 OK
 ```
@@ -205,6 +252,17 @@ OK
   - `Test 48:` Device catalog CRUD with name uniqueness checks.
   - `Test 49:` Non-admin boundary protection rejecting unauthorized access to all `/admin/*` routes.
   - `Test 50:` Public interface regression check ensuring admin changes don't affect public portal.
+
+- **User Activity Tracking & Live Synchronisation Suite (Tests 51–59):**
+  - `Test 51:` User activity table existence and complete relational schema verification.
+  - `Test 52:` User login and logout event automatic recording in `user_activity`.
+  - `Test 53:` Centre search and filtering activity tracking with query, state, and city context.
+  - `Test 54:` Centre details view activity tracking with `centre_id`, city, and state.
+  - `Test 55:` Rewards calculator activity tracking with device name and quantity details.
+  - `Test 56:` Live database synchronisation verifying Admin CRUD immediately updates User searches without cache lag.
+  - `Test 57:` Admin activity dashboard (`/admin/activities`) rendering with KPI metrics, filters, and audit trail.
+  - `Test 58:` Strict non-admin boundary protection preventing users or guests from viewing activity logs.
+  - `Test 59:` Concurrent multi-user activity isolation with simultaneous independent searches.
 
 ---
 

@@ -91,6 +91,28 @@
       <div class="admin-stat-tag">Plotted on Leaflet Map</div>
     </div>
   </div>
+
+  <div class="admin-stat-card">
+    <div class="admin-stat-icon icon-emerald">
+      <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg>
+    </div>
+    <div class="admin-stat-info">
+      <div class="admin-stat-val">{{ total_logins }}</div>
+      <div class="admin-stat-lbl">User Logins</div>
+      <div class="admin-stat-tag">Authenticated Sessions</div>
+    </div>
+  </div>
+
+  <div class="admin-stat-card">
+    <div class="admin-stat-icon icon-teal">
+      <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+    </div>
+    <div class="admin-stat-info">
+      <div class="admin-stat-val">{{ total_searches }}</div>
+      <div class="admin-stat-lbl">Centre Searches</div>
+      <div class="admin-stat-tag">City &amp; Keyword Queries</div>
+    </div>
+  </div>
 </div>
 
 <!-- Interactive Chart.js Section -->
@@ -231,6 +253,97 @@
       <div class="empty-state">No user accounts registered yet.</div>
     {% endif %}
   </div>
+</div>
+
+<!-- Live User Activity & Search Analytics Section -->
+<div class="admin-card" style="margin-top: 1.5rem;">
+  <div class="admin-card-header">
+    <div>
+      <h3 class="admin-card-title">Live User Activity &amp; Search Queries</h3>
+      <p class="admin-card-subtitle">Recent user logins, facility directory searches, and details viewed</p>
+    </div>
+    <a href="{{ url_for('admin_activities') }}" class="btn-text">View All Activity Logs ({{ total_logins + total_searches + total_views + total_rewards }}) &rarr;</a>
+  </div>
+
+  {% if recent_activities %}
+    <div class="table-responsive">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th style="width: 70px;">ID</th>
+            <th>Date &amp; Time</th>
+            <th>User Account</th>
+            <th>Activity Type</th>
+            <th>Search Query / Action Details</th>
+            <th>City / State</th>
+            <th>Facility</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in recent_activities %}
+            <tr>
+              <td><span class="font-mono text-muted">#{{ a.activity_id }}</span></td>
+              <td>
+                <div class="font-semibold text-dark">{{ a.created_at.strftime('%d %b %Y') if a.created_at else 'Recent' }}</div>
+                <small class="text-muted">{{ a.created_at.strftime('%H:%M:%S') if a.created_at else '' }}</small>
+              </td>
+              <td>
+                {% if a.user_id %}
+                  <div class="font-semibold text-dark">{{ a.user_name }}</div>
+                  <small class="text-muted font-mono" style="font-size: 0.8rem;">{{ a.user_email }}</small>
+                {% else %}
+                  <span class="admin-pill-neutral">Guest Visitor</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if a.activity_type == 'login' %}
+                  <span class="badge-status badge-active">Login</span>
+                {% elif a.activity_type == 'logout' %}
+                  <span class="admin-pill-neutral">Logout</span>
+                {% elif a.activity_type == 'search' %}
+                  <span class="centre-badge badge-cpcb">Search</span>
+                {% elif a.activity_type == 'centre_view' %}
+                  <span class="centre-badge badge-verified">Details Viewed</span>
+                {% elif a.activity_type == 'rewards_calc' %}
+                  <span class="centre-badge badge-mta">Rewards Calc</span>
+                {% else %}
+                  <span class="admin-pill-neutral">{{ a.activity_type }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if a.search_query %}
+                  <span class="text-dark font-medium">{{ a.search_query }}</span>
+                {% else %}
+                  <span class="text-muted">&mdash;</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if a.city or a.state %}
+                  <div>{{ a.city or 'Any City' }}</div>
+                  <small class="text-muted">{{ a.state or '' }}</small>
+                {% else %}
+                  <span class="text-muted">&mdash;</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if a.centre_id and a.centre_name %}
+                  <a href="{{ url_for('admin_centres_view', centre_id=a.centre_id) }}" class="font-semibold" style="color: var(--primary);">
+                    {{ a.centre_name }}
+                  </a>
+                {% elif a.centre_id %}
+                  <span class="font-mono">#{{ a.centre_id }}</span>
+                {% else %}
+                  <span class="text-muted">&mdash;</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">No user activities recorded yet. User logins and directory searches will display here in real-time.</div>
+  {% endif %}
 </div>
 {% endblock %}
 
