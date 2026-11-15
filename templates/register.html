@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Create Account | EcoLocate{% endblock %}
+
+{% block content %}
+<section class="auth-wrapper">
+  <div class="auth-card" style="max-width: 480px;">
+    <div class="auth-header">
+      <a href="{{ url_for('index') }}" class="brand-logo">
+        <svg viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="#0e3b2e"/>
+          <path d="M 16 7 C 22 7 24 12 24 16 C 19 17 14 15 12 12 C 11 9 13 7 16 7 Z" fill="#10b981"/>
+          <circle cx="20" cy="14" r="1.5" fill="#ffffff"/>
+        </svg>
+        <span>Eco<span>Locate</span></span>
+      </a>
+      <h1 class="auth-title">Join EcoLocate</h1>
+      <p class="auth-desc">Create your free profile to start tracking your circular tech impact</p>
+    </div>
+
+    <form class="auth-form" id="register-form" method="POST" action="{{ url_for('register') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="form-group">
+        <label for="reg-name" class="form-label">Full Name</label>
+        <input type="text" id="reg-name" name="full_name" class="form-input" placeholder="e.g. Alex Morgan" required autocomplete="name" value="{{ request.form.get('full_name', '') }}">
+      </div>
+
+      <div class="form-group">
+        <label for="reg-email" class="form-label">Email Address</label>
+        <input type="email" id="reg-email" name="email" class="form-input" placeholder="alex@domain.com" required autocomplete="email" value="{{ request.form.get('email', '') }}">
+      </div>
+
+      <div class="form-group">
+        <label for="reg-password" class="form-label">Password</label>
+        <div class="password-input-group">
+          <input type="password" id="reg-password" name="password" class="form-input" placeholder="At least 8 characters" required minlength="8" autocomplete="new-password">
+          <button type="button" class="password-toggle-btn" data-target="reg-password" aria-label="Toggle password visibility">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="reg-confirm-password" class="form-label">Confirm Password</label>
+        <div class="password-input-group">
+          <input type="password" id="reg-confirm-password" name="confirm_password" class="form-input" placeholder="Re-enter password" required minlength="8" autocomplete="new-password">
+          <button type="button" class="password-toggle-btn" data-target="reg-confirm-password" aria-label="Toggle confirm password visibility">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-checkbox-label" style="align-items: flex-start;">
+          <input type="checkbox" id="reg-terms" name="terms" required style="margin-top: 4px;" checked>
+          <span style="font-size: 0.825rem; line-height: 1.45;">
+            I agree to the <a href="#" style="color: var(--primary); text-decoration: underline;" onclick="return false;">Terms of Service</a> and acknowledge the environmental guidelines of EcoLocate.
+          </span>
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full" style="padding: 0.85rem;">
+        Create Account
+      </button>
+
+      <div class="auth-divider">SECURE REGISTRATION</div>
+
+      <div class="auth-footer">
+        Already registered? <a href="{{ url_for('login') }}">Sign In here</a>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}

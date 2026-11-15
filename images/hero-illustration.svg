@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ecfdf5"/>
+      <stop offset="100%" stop-color="#d1fae5"/>
+    </linearGradient>
+    <linearGradient id="leafGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="darkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#164e3d"/>
+      <stop offset="100%" stop-color="#06251b"/>
+    </linearGradient>
+    <linearGradient id="circuitGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0e3b2e" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="600" height="500" rx="24" fill="url(#bgGrad)" />
+
+  <!-- Subtle Circuit Pattern Grid -->
+  <g stroke="#a7f3d0" stroke-width="1.5" stroke-linecap="round" opacity="0.6">
+    <path d="M 50 100 L 150 100 L 190 140 L 280 140" fill="none"/>
+    <circle cx="280" cy="140" r="4" fill="#10b981"/>
+    
+    <path d="M 450 80 L 520 80 L 550 110" fill="none"/>
+    <circle cx="450" cy="80" r="4" fill="#10b981"/>
+    
+    <path d="M 60 380 L 130 380 L 170 340 L 220 340" fill="none"/>
+    <circle cx="60" cy="380" r="4" fill="#10b981"/>
+
+    <path d="M 420 400 L 480 400 L 520 360 L 560 360" fill="none"/>
+    <circle cx="560" cy="360" r="4" fill="#10b981"/>
+  </g>
+
+  <!-- Central Electronics Board / Device Base -->
+  <g filter="url(#softShadow)">
+    <!-- Main Device Chassis -->
+    <rect x="140" y="90" width="320" height="320" rx="36" fill="#ffffff" stroke="#e5e9e6" stroke-width="2"/>
+    
+    <!-- Internal Recessed Plate -->
+    <rect x="165" y="115" width="270" height="270" rx="28" fill="url(#darkGrad)"/>
+    
+    <!-- Microchip in Center -->
+    <rect x="240" y="190" width="120" height="120" rx="18" fill="#0f2e22" stroke="#34d399" stroke-width="2.5"/>
+    
+    <!-- Chip Golden/Emerald Connectors -->
+    <g fill="#10b981">
+      <!-- Top pins -->
+      <rect x="255" y="180" width="8" height="10" rx="2"/>
+      <rect x="275" y="180" width="8" height="10" rx="2"/>
+      <rect x="295" y="180" width="8" height="10" rx="2"/>
+      <rect x="315" y="180" width="8" height="10" rx="2"/>
+      <rect x="335" y="180" width="8" height="10" rx="2"/>
+      <!-- Bottom pins -->
+      <rect x="255" y="310" width="8" height="10" rx="2"/>
+      <rect x="275" y="310" width="8" height="10" rx="2"/>
+      <rect x="295" y="310" width="8" height="10" rx="2"/>
+      <rect x="315" y="310" width="8" height="10" rx="2"/>
+      <rect x="335" y="310" width="8" height="10" rx="2"/>
+      <!-- Left pins -->
+      <rect x="230" y="205" width="10" height="8" rx="2"/>
+      <rect x="230" y="225" width="10" height="8" rx="2"/>
+      <rect x="230" y="245" width="10" height="8" rx="2"/>
+      <rect x="230" y="265" width="10" height="8" rx="2"/>
+      <rect x="230" y="285" width="10" height="8" rx="2"/>
+      <!-- Right pins -->
+      <rect x="360" y="205" width="10" height="8" rx="2"/>
+      <rect x="360" y="225" width="10" height="8" rx="2"/>
+      <rect x="360" y="245" width="10" height="8" rx="2"/>
+      <rect x="360" y="265" width="10" height="8" rx="2"/>
+      <rect x="360" y="285" width="10" height="8" rx="2"/>
+    </g>
+
+    <!-- Eco Leaf Emblem on the Chip -->
+    <path d="M 300 220 C 330 220 335 250 335 270 C 315 275 285 270 275 255 C 265 240 280 220 300 220 Z" fill="url(#leafGrad)"/>
+    <path d="M 285 265 Q 300 250 320 235" stroke="#a7f3d0" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+
+    <!-- Circular Recycling Arrows Loop around Chip -->
+    <g stroke="#34d399" stroke-width="3" stroke-linecap="round" fill="none">
+      <path d="M 215 170 A 110 110 0 0 1 385 170"/>
+      <polygon points="385,160 395,175 380,180" fill="#34d399"/>
+      
+      <path d="M 385 330 A 110 110 0 0 1 215 330"/>
+      <polygon points="215,340 205,325 220,320" fill="#34d399"/>
+    </g>
+  </g>
+
+  <!-- Floating Tech & Eco Badges -->
+  <!-- Top Left Badge: Certified Recycling -->
+  <g filter="url(#softShadow)" transform="translate(60, 140)">
+    <rect width="135" height="50" rx="14" fill="#ffffff" stroke="#e5e9e6" stroke-width="1.5"/>
+    <circle cx="28" cy="25" r="14" fill="#ecfdf5"/>
+    <path d="M 23 25 L 27 29 L 34 20" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <text x="50" y="23" font-family="-apple-system, sans-serif" font-size="11" font-weight="700" fill="#0e3b2e">CERTIFIED</text>
+    <text x="50" y="37" font-family="-apple-system, sans-serif" font-size="10" font-weight="500" fill="#6b7280">Safe Recovery</text>
+  </g>
+
+  <!-- Bottom Right Badge: Circular Metric -->
+  <g filter="url(#softShadow)" transform="translate(390, 310)">
+    <rect width="145" height="56" rx="14" fill="#ffffff" stroke="#e5e9e6" stroke-width="1.5"/>
+    <circle cx="28" cy="28" r="14" fill="#d1fae5"/>
+    <!-- Leaf Icon -->
+    <path d="M 28 20 C 33 20 35 24 35 28 C 30 29 25 28 23 25 C 22 23 25 20 28 20 Z" fill="#059669"/>
+    <text x="50" y="25" font-family="-apple-system, sans-serif" font-size="13" font-weight="800" fill="#047857">100% Closed</text>
+    <text x="50" y="40" font-family="-apple-system, sans-serif" font-size="10" font-weight="500" fill="#4b5563">Circular Loop</text>
+  </g>
+
+  <!-- Floating Green Particle Dots -->
+  <circle cx="110" cy="260" r="6" fill="#10b981" opacity="0.7"/>
+  <circle cx="500" cy="220" r="5" fill="#34d399" opacity="0.8"/>
+  <circle cx="460" cy="120" r="7" fill="#059669" opacity="0.6"/>
+</svg>

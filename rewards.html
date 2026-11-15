@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoRewards Calculator | EcoLocate</title>
+  <meta name="description" content="Calculate your estimated EcoRewards points and carbon offset when responsibly recycling obsolete electronic devices.">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" type="image/svg+xml" href="images/logo.svg">
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header class="site-header">
+    <div class="container header-container">
+      <a href="index.html" class="brand-logo" aria-label="EcoLocate Home">
+        <svg viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="#0e3b2e"/>
+          <path d="M 16 7 C 22 7 24 12 24 16 C 19 17 14 15 12 12 C 11 9 13 7 16 7 Z" fill="#10b981"/>
+          <path d="M 13 15 L 16 12 L 20 14" stroke="#d1fae5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="20" cy="14" r="1.5" fill="#ffffff"/>
+          <path d="M 9 20 C 10 24 14 25 17 25 C 21 25 24 23 24 21" stroke="#34d399" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span>Eco<span>Locate</span></span>
+      </a>
+
+      <nav class="nav-links" aria-label="Main Navigation">
+        <a href="index.html" class="nav-link">Home</a>
+        <a href="centres.html" class="nav-link">Find Centres</a>
+        <a href="awareness.html" class="nav-link">Why E-Waste Matters</a>
+        <a href="rewards.html" class="nav-link active">Rewards</a>
+        <a href="about.html" class="nav-link">About</a>
+      </nav>
+
+      <div class="header-actions">
+        <a href="login.html" class="btn btn-ghost btn-sm">Log In</a>
+        <a href="register.html" class="btn btn-primary btn-sm">Register</a>
+      </div>
+
+      <button class="mobile-toggle" aria-label="Toggle Navigation Menu" aria-expanded="false">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="section-sm" style="background-color: var(--bg-surface); border-bottom: 1px solid var(--border-color);">
+      <div class="container">
+        <div class="section-badge">EcoRewards Program</div>
+        <h1 class="section-title">Calculate Your Recycling Rewards</h1>
+        <p class="section-desc">
+          Estimate how many EcoPoints your retired gadgets can generate when handed over to certified e-waste facilities.
+        </p>
+      </div>
+    </section>
+
+    <!-- Rewards Calculator Section -->
+    <section class="section">
+      <div class="container">
+        <div class="rewards-layout">
+          
+          <!-- Input Form Card -->
+          <div class="calculator-card">
+            <div class="calculator-header">
+              <h2 class="calculator-title">Calculator Parameters</h2>
+              <p class="calculator-desc">Select device category, working condition, and quantity to project estimated points.</p>
+            </div>
+
+            <form id="rewards-calc-form" onsubmit="return false;" style="display: flex; flex-direction: column; gap: 1.5rem;">
+              <div class="form-group">
+                <label for="device-select" class="form-label">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                  </svg>
+                  Select Device
+                </label>
+                <select id="device-select" class="form-select">
+                  <option value="smartphone">Smartphone / Mobile Phone (150 pts base)</option>
+                  <option value="laptop">Laptop / Notebook Computer (350 pts base)</option>
+                  <option value="desktop">Desktop PC / Workstation (400 pts base)</option>
+                  <option value="tablet">Tablet / E-Reader (200 pts base)</option>
+                  <option value="monitor">Computer Monitor / Display (250 pts base)</option>
+                  <option value="television">Television Set (LED / LCD) (320 pts base)</option>
+                  <option value="battery">Lithium Battery / Power Bank (80 pts base)</option>
+                  <option value="accessories">Peripherals, Cables & Chargers (40 pts base)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="condition-select" class="form-label">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  Device Physical Condition
+                </label>
+                <select id="condition-select" class="form-select">
+                  <option value="minor_faults">Minor Faults / Repairable (1.0x baseline)</option>
+                  <option value="working">Functional / Working (1.25x bonus)</option>
+                  <option value="scrap">Non-functional / Heavy Scrap (0.75x baseline)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="quantity-input" class="form-label">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path>
+                  </svg>
+                  Quantity (Units)
+                </label>
+                <div class="quantity-control">
+                  <button type="button" class="quantity-btn" id="qty-minus" aria-label="Decrease quantity">-</button>
+                  <input type="number" id="quantity-input" class="quantity-input" value="1" min="1" max="99">
+                  <button type="button" class="quantity-btn" id="qty-plus" aria-label="Increase quantity">+</button>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
+                <button type="button" class="btn btn-primary btn-full" id="calculate-rewards-btn">
+                  <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                  </svg>
+                  Calculate Rewards
+                </button>
+                <button type="button" class="btn btn-outline" id="reset-calculator-btn" title="Reset to default">Reset</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Dynamic Output Card -->
+          <div class="rewards-result-card">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h3 style="font-size: 1.25rem; font-weight: 700; color: var(--primary-dark);">Estimated Yield</h3>
+                <span class="centre-badge" id="rewards-tier-badge">Green Starter Tier</span>
+              </div>
+
+              <div class="points-display-box">
+                <div class="points-label">Total Estimated Reward</div>
+                <div class="points-value" id="calculated-points">150</div>
+                <div class="points-unit">EcoPoints (Demonstration)</div>
+              </div>
+
+              <div class="impact-metrics-row">
+                <div class="impact-metric">
+                  <div class="impact-metric-value" id="calculated-co2">18 kg</div>
+                  <div class="impact-metric-label">CO2e Emissions Prevented</div>
+                </div>
+                <div class="impact-metric">
+                  <div class="impact-metric-value" id="calculated-materials">35 g</div>
+                  <div class="impact-metric-label">Circular Metals Recovered</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Mandatory Clear Disclaimer -->
+            <div class="rewards-disclaimer">
+              <strong style="color: var(--primary-dark); display: block; margin-bottom: 0.25rem;">Notice: Illustrative Demo Value Only</strong>
+              EcoRewards points and associated metrics displayed above are strictly illustrative simulations for demonstration purposes in Phase 1. They do not constitute actual legal payments, monetary payouts, or binding financial guarantees.
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Redemption Tiers Showcase -->
+        <div class="rewards-tiers">
+          <div class="section-header">
+            <span class="section-badge">How to Use Points</span>
+            <h2 class="section-title">Community & Sustainability Tiers</h2>
+            <p class="section-desc">
+              In subsequent phases, verified EcoPoints will be redeemable through eco-partner vouchers, native sapling plantation drives, and circular electronics credits.
+            </p>
+          </div>
+
+          <div class="tiers-grid">
+            <div class="tier-card">
+              <h3 class="tier-title">Sapling Planting Drive</h3>
+              <div class="tier-points">300 EcoPoints</div>
+              <p class="benefit-desc">Fund verified urban reforestation projects. Receive a digital tree-planting certificate with GPS coordinates.</p>
+            </div>
+
+            <div class="tier-card">
+              <h3 class="tier-title">Refurbished Tech Credit</h3>
+              <div class="tier-points">750 EcoPoints</div>
+              <p class="benefit-desc">Apply voucher discounts toward certified refurbished laptops, smartphones, and accessories from our partners.</p>
+            </div>
+
+            <div class="tier-card">
+              <h3 class="tier-title">Corporate ESG Badges</h3>
+              <div class="tier-points">2,000+ EcoPoints</div>
+              <p class="benefit-desc">Audited quarterly sustainability compliance certificates suitable for enterprise environmental reporting.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a href="index.html" class="brand-logo">
+            <svg viewBox="0 0 32 32" fill="none">
+              <rect width="32" height="32" rx="8" fill="#10b981"/>
+              <path d="M 16 7 C 22 7 24 12 24 16 C 19 17 14 15 12 12 C 11 9 13 7 16 7 Z" fill="#0e3b2e"/>
+              <circle cx="20" cy="14" r="1.5" fill="#ffffff"/>
+            </svg>
+            <span>Eco<span>Locate</span></span>
+          </a>
+          <p class="footer-desc">
+            Incentivizing responsible e-waste recycling through transparent estimations and circular economy community initiatives.
+          </p>
+          <div class="footer-disclaimer-tag">Demo Points System</div>
+        </div>
+
+        <div>
+          <h4 class="footer-heading">Platform</h4>
+          <ul class="footer-links">
+            <li><a href="centres.html" class="footer-link">Find Centres</a></li>
+            <li><a href="awareness.html" class="footer-link">Why E-Waste Matters</a></li>
+            <li><a href="rewards.html" class="footer-link">Rewards Calculator</a></li>
+            <li><a href="about.html" class="footer-link">About EcoLocate</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 class="footer-heading">Hazardous Materials</h4>
+          <ul class="footer-links">
+            <li><a href="awareness.html#lead" class="footer-link">Lead Hazards</a></li>
+            <li><a href="awareness.html#mercury" class="footer-link">Mercury Impact</a></li>
+            <li><a href="awareness.html#cadmium" class="footer-link">Cadmium Toxicity</a></li>
+            <li><a href="awareness.html#lifecycle" class="footer-link">Disposal Lifecycle</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 class="footer-heading">Account & Access</h4>
+          <ul class="footer-links">
+            <li><a href="login.html" class="footer-link">Sign In</a></li>
+            <li><a href="register.html" class="footer-link">Create Account</a></li>
+            <li><a href="about.html#roadmap" class="footer-link">Project Roadmap</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>&copy; 2026 EcoLocate. EcoRewards calculation algorithm is illustrative for Phase 1.</div>
+        <div>Points hold no direct cash redemption value.</div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+  <script src="js/rewards.js"></script>
+</body>
+</html>

@@ -1,0 +1,327 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Dashboard Overview | EcoLocate Admin{% endblock %}
+
+{% block breadcrumb %}
+  <span class="admin-breadcrumb-active">Control Panel &amp; Dashboard Overview</span>
+{% endblock %}
+
+{% block content %}
+<div class="admin-page-header">
+  <div>
+    <h1 class="admin-page-title">Executive Control Panel &amp; Dashboard</h1>
+    <p class="admin-page-subtitle">Real-time repository statistics from MySQL database <code>ewaste_db</code>.</p>
+  </div>
+  <div class="admin-page-actions">
+    <a href="{{ url_for('admin_centres_add') }}" class="btn btn-primary btn-sm">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+      Add Centre
+    </a>
+    <a href="{{ url_for('admin_csv_import') }}" class="btn btn-outline btn-sm">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path></svg>
+      Import CSV
+    </a>
+  </div>
+</div>
+
+<!-- 6 KPI Metric Cards -->
+<div class="admin-stats-grid">
+  <div class="admin-stat-card">
+    <div class="admin-stat-icon icon-emerald">
+      <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+    </div>
+    <div class="admin-stat-info">
+      <div class="admin-stat-val">{{ centre_count }}</div>
+      <div class="admin-stat-lbl">Recycling Centres</div>
+      <div class="admin-stat-tag">CPCB Authorised Directory</div>
+    </div>
+  </div>
+
+  <div class="admin-stat-card">
+    <div class="admin-stat-icon icon-blue">
+      <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+    </div>
+    <div class="admin-stat-info">
+      <div class="admin-stat-val">{{ user_count }}</div>
+      <div class="admin-stat-lbl">Registered Users</div>
+      <div class="admin-stat-tag">{{ active_users_count }} active accounts</div>
+    </div>
+  </div>
+
+  <div class="admin-stat-card">
+    <div class="admin-stat-icon icon-purple">
+      <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+    </div>
+    <div class="admin-stat-info">
+      <div class="admin-stat-val">{{ device_count }}</div>
+      <div class="admin-stat-lbl">Electronic Devices</div>
+      <div class="admin-stat-tag">Rewards Calculator Items</div>
+    </div>
+  </div>
+
+  <div class="admin-stat-card">
+    <div class="admin-stat-icon icon-teal">
+      <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+    </div>
+    <div class="admin-stat-info">
+      <div class="admin-stat-val">{{ website_count }}</div>
+      <div class="admin-stat-lbl">Official Websites</div>
+      <div class="admin-stat-tag">{{ "%.1f"|format((website_count / centre_count * 100) if centre_count > 0 else 0) }}% coverage</div>
+    </div>
+  </div>
+
+  <div class="admin-stat-card">
+    <div class="admin-stat-icon icon-amber">
+      <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+    </div>
+    <div class="admin-stat-info">
+      <div class="admin-stat-val">{{ phone_count }}</div>
+      <div class="admin-stat-lbl">Direct Phone Numbers</div>
+      <div class="admin-stat-tag">Verified helpline contacts</div>
+    </div>
+  </div>
+
+  <div class="admin-stat-card">
+    <div class="admin-stat-icon icon-green">
+      <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+    </div>
+    <div class="admin-stat-info">
+      <div class="admin-stat-val">{{ coords_count }}</div>
+      <div class="admin-stat-lbl">GPS Mapped Centres</div>
+      <div class="admin-stat-tag">Plotted on Leaflet Map</div>
+    </div>
+  </div>
+</div>
+
+<!-- Interactive Chart.js Section -->
+<div class="admin-charts-grid">
+  <!-- Bar Chart: Top States -->
+  <div class="admin-card">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title">Top States by Recycling Facilities</h3>
+        <p class="admin-card-subtitle">Distribution of authorized e-waste facilities across leading states</p>
+      </div>
+      <span class="badge-outline">{{ top_states|length }} States</span>
+    </div>
+    <div class="admin-chart-box">
+      <canvas id="stateDistributionChart" height="240"></canvas>
+    </div>
+  </div>
+
+  <!-- Doughnut Chart: Verification & Contacts -->
+  <div class="admin-card">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title">Facility Information Completeness</h3>
+        <p class="admin-card-subtitle">Audited breakdown of websites, phone contacts, and GPS data</p>
+      </div>
+      <span class="badge-outline">Audit Status</span>
+    </div>
+    <div class="admin-chart-box">
+      <canvas id="verificationBreakdownChart" height="240"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Additions Grids -->
+<div class="admin-tables-split">
+  <!-- Recent Centre Additions -->
+  <div class="admin-card">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title">Recent Centre Additions</h3>
+        <p class="admin-card-subtitle">Latest verified recycling facilities committed to database</p>
+      </div>
+      <a href="{{ url_for('admin_centres') }}" class="btn-text">View All Centres &rarr;</a>
+    </div>
+
+    {% if recent_centres %}
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Facility Name</th>
+              <th>State / City</th>
+              <th>Capacity</th>
+              <th style="text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in recent_centres %}
+              <tr>
+                <td>
+                  <div class="font-semibold text-dark">{{ c.centre_name }}</div>
+                  <small class="text-muted">{{ c.centre_type or 'Authorised dismantler' }}</small>
+                </td>
+                <td>
+                  <div>{{ c.city }}</div>
+                  <small class="text-muted">{{ c.state }}</small>
+                </td>
+                <td>
+                  <span class="admin-pill-neutral">{{ c.capacity_mta or 'Not specified' }}</span>
+                </td>
+                <td style="text-align: right;">
+                  <a href="{{ url_for('admin_centres_view', centre_id=c.id) }}" class="btn-icon" title="View Details">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                  </a>
+                  <a href="{{ url_for('admin_centres_edit', centre_id=c.id) }}" class="btn-icon" title="Edit Centre">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state">No recycling centres registered yet.</div>
+    {% endif %}
+  </div>
+
+  <!-- Recent User Registrations -->
+  <div class="admin-card">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title">Recent User Registrations</h3>
+        <p class="admin-card-subtitle">Latest community member profiles created</p>
+      </div>
+      <a href="{{ url_for('admin_users') }}" class="btn-text">View All Users &rarr;</a>
+    </div>
+
+    {% if recent_users %}
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Member Name</th>
+              <th>Email Address</th>
+              <th>Status</th>
+              <th style="text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in recent_users %}
+              <tr>
+                <td>
+                  <div class="font-semibold text-dark">{{ u.full_name }}</div>
+                  <small class="text-muted">{{ u.created_at.strftime('%d %b %Y') if u.created_at else 'Recent' }}</small>
+                </td>
+                <td>
+                  <span class="text-muted font-mono" style="font-size: 0.85rem;">{{ u.email }}</span>
+                </td>
+                <td>
+                  {% if u.is_active %}
+                    <span class="badge-status badge-active">Active</span>
+                  {% else %}
+                    <span class="badge-status badge-inactive">Deactivated</span>
+                  {% endif %}
+                </td>
+                <td style="text-align: right;">
+                  <a href="{{ url_for('admin_users_view', user_id=u.id) }}" class="btn-icon" title="View Account Profile">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state">No user accounts registered yet.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof Chart === 'undefined') {
+      console.warn('Chart.js not loaded from CDN, analytics graphs skipped.');
+      return;
+    }
+
+    // 1. State Distribution Bar Chart
+    const stateLabels = {{ state_labels|tojson|safe }};
+    const stateCounts = {{ state_counts|tojson|safe }};
+
+    const ctxState = document.getElementById('stateDistributionChart');
+    if (ctxState && stateLabels.length > 0) {
+      new Chart(ctxState, {
+        type: 'bar',
+        data: {
+          labels: stateLabels,
+          datasets: [{
+            label: 'Centres Count',
+            data: stateCounts,
+            backgroundColor: '#10b981',
+            hoverBackgroundColor: '#0e3b2e',
+            borderRadius: 6,
+            maxBarThickness: 36
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#0e3b2e',
+              titleFont: { family: '-apple-system, sans-serif', weight: 'bold' }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0 },
+              grid: { color: 'rgba(0, 0, 0, 0.05)' }
+            },
+            x: {
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    // 2. Verification Breakdown Doughnut Chart
+    const ctxVerify = document.getElementById('verificationBreakdownChart');
+    if (ctxVerify) {
+      const websiteCnt = {{ website_count }};
+      const phoneCnt = {{ phone_count }};
+      const coordsCnt = {{ coords_count }};
+      const totalCnt = {{ centre_count }};
+      const pendingCnt = Math.max(0, totalCnt - websiteCnt);
+
+      new Chart(ctxVerify, {
+        type: 'doughnut',
+        data: {
+          labels: ['With Verified Website', 'With Phone Contact', 'GPS Mapped Coordinates', 'Pending Direct Portal'],
+          datasets: [{
+            data: [websiteCnt, phoneCnt, coordsCnt, pendingCnt],
+            backgroundColor: ['#10b981', '#f59e0b', '#3b82f6', '#9ca3af'],
+            hoverOffset: 6,
+            borderWidth: 2,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                boxWidth: 12,
+                font: { family: '-apple-system, sans-serif', size: 11 }
+              }
+            }
+          },
+          cutout: '68%'
+        }
+      });
+    }
+  });
+</script>
+{% endblock %}

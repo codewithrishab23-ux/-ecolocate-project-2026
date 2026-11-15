@@ -1,0 +1,289 @@
+{% extends "admin_base.html" %}
+
+{% block title %}CSV Ingestion &amp; Batch Import | EcoLocate Admin{% endblock %}
+
+{% block breadcrumb %}
+  <a href="{{ url_for('admin_dashboard') }}">Control Panel</a>
+  <span class="admin-breadcrumb-sep">/</span>
+  <span class="admin-breadcrumb-active">CSV Ingestion</span>
+{% endblock %}
+
+{% block content %}
+<div class="admin-page-header">
+  <div>
+    <h1 class="admin-page-title">Batch Recycling Centre CSV Ingestion</h1>
+    <p class="admin-page-subtitle">Upload, validate schema, preview records, detect duplicates, and import facilities into MySQL.</p>
+  </div>
+  <div class="admin-page-actions">
+    <a href="{{ url_for('admin_centres') }}" class="btn btn-outline btn-sm">&larr; Back to Directory</a>
+  </div>
+</div>
+
+<!-- Import Summary Alert (If import just occurred) -->
+{% if import_result %}
+  <div class="admin-card" style="border-left: 4px solid {% if import_result.failed_count > 0 %}#f59e0b{% else %}#10b981{% endif %}; margin-bottom: 2rem;">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title">Batch Ingestion Execution Report</h3>
+        <p class="admin-card-subtitle">Executed within a safe database transaction. Existing records were untouched.</p>
+      </div>
+      <span class="badge-status {% if import_result.failed_count == 0 %}badge-active{% else %}badge-inactive{% endif %}">
+        {{ import_result.imported_count }} Added
+      </span>
+    </div>
+
+    <div class="admin-stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-top: 1rem;">
+      <div class="admin-stat-card">
+        <div class="admin-stat-info">
+          <div class="admin-stat-val font-mono">{{ import_result.total_rows }}</div>
+          <div class="admin-stat-lbl">Total CSV Rows</div>
+        </div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="admin-stat-info">
+          <div class="admin-stat-val font-mono text-emerald" style="color: #059669;">{{ import_result.imported_count }}</div>
+          <div class="admin-stat-lbl">New Facilities Ingested</div>
+        </div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="admin-stat-info">
+          <div class="admin-stat-val font-mono" style="color: #d97706;">{{ import_result.duplicate_count }}</div>
+          <div class="admin-stat-lbl">Duplicates Skipped</div>
+        </div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="admin-stat-info">
+          <div class="admin-stat-val font-mono" style="color: #dc2626;">{{ import_result.failed_count }}</div>
+          <div class="admin-stat-lbl">Failed / Invalid Rows</div>
+        </div>
+      </div>
+    </div>
+
+    {% if import_result.duplicates_list %}
+      <div style="margin-top: 1.5rem;">
+        <h4 style="font-size: 0.9375rem; font-weight: 600; margin-bottom: 0.5rem; color: #92400e;">Skipped Duplicates (Already in MySQL):</h4>
+        <ul style="font-size: 0.85rem; color: var(--text-muted); max-height: 140px; overflow-y: auto; padding-left: 1.25rem;">
+          {% for dup in import_result.duplicates_list %}
+            <li>Row {{ dup.row }}: <strong>{{ dup.name }}</strong> ({{ dup.city }}, {{ dup.state }})</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if import_result.errors_list %}
+      <div style="margin-top: 1.5rem;">
+        <h4 style="font-size: 0.9375rem; font-weight: 600; margin-bottom: 0.5rem; color: #b91c1c;">Validation Errors:</h4>
+        <ul style="font-size: 0.85rem; color: #b91c1c; max-height: 140px; overflow-y: auto; padding-left: 1.25rem;">
+          {% for err in import_result.errors_list %}
+            <li>Row {{ err.row }}: {{ err.error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+
+<!-- Step 1: Upload Form -->
+<div class="admin-card" style="margin-bottom: 2rem;">
+  <div class="admin-card-header">
+    <div>
+      <h3 class="admin-card-title">1. Upload Recycling Centre CSV File</h3>
+      <p class="admin-card-subtitle">Choose a valid CSV file containing recycling centre records matching CPCB guidelines.</p>
+    </div>
+    <span class="badge-outline">Step 1 of 2</span>
+  </div>
+
+  <form method="POST" action="{{ url_for('admin_csv_import') }}" enctype="multipart/form-data" class="admin-form" style="padding: 1.5rem 0;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="form-grid-2">
+      <div class="form-group full-width">
+        <label for="csv_file" class="form-label required">Select CSV File</label>
+        <input type="file" id="csv_file" name="csv_file" accept=".csv,text/csv" required class="form-input" style="padding: 0.65rem;">
+        <small class="form-help">Accepts UTF-8 encoded .csv files up to 10 MB.</small>
+      </div>
+
+      <div class="form-group full-width">
+        <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+          <input type="checkbox" name="preview_only" value="1" {% if preview_mode or not request.form %}checked{% endif %}>
+          <span><strong>Preview records before committing to MySQL</strong> (Recommended to verify schema and check for duplicate facilities)</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="form-actions" style="margin-top: 1.5rem; display: flex; gap: 1rem;">
+      <button type="submit" class="btn btn-primary">
+        Upload &amp; Analyze CSV
+      </button>
+      <a href="{{ url_for('admin_centres') }}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<!-- Step 2: Preview Mode (If preview requested) -->
+{% if preview_mode and preview_data %}
+  <div class="admin-card" style="margin-bottom: 2rem; border-top: 3px solid #10b981;">
+    <div class="admin-card-header">
+      <div>
+        <h3 class="admin-card-title">2. CSV Analysis &amp; Duplicate Detection Preview</h3>
+        <p class="admin-card-subtitle">
+          Found <strong>{{ preview_data.total_rows }}</strong> records.
+          <span style="color: #059669; font-weight: 600;">{{ preview_data.new_count }} New</span>,
+          <span style="color: #d97706; font-weight: 600;">{{ preview_data.duplicate_count }} Existing Duplicates</span>.
+        </p>
+      </div>
+      <span class="badge-status badge-active">Schema Validated</span>
+    </div>
+
+    <!-- Preview Table -->
+    <div class="table-responsive">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Facility Name</th>
+            <th>State</th>
+            <th>City</th>
+            <th>Address</th>
+            <th>Capacity</th>
+            <th>Website</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in preview_data.rows[:15] %}
+            <tr {% if r.is_duplicate %}style="background-color: #fffbeb;"{% endif %}>
+              <td>
+                {% if r.is_duplicate %}
+                  <span class="badge-status badge-inactive" title="Matches existing MySQL record">Duplicate</span>
+                {% else %}
+                  <span class="badge-status badge-active">New Record</span>
+                {% endif %}
+              </td>
+              <td class="font-semibold text-dark">{{ r.name }}</td>
+              <td>{{ r.state }}</td>
+              <td>{{ r.city }}</td>
+              <td class="text-light" style="max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ r.address }}">{{ r.address }}</td>
+              <td><span class="admin-pill-neutral font-mono" style="font-size: 0.775rem;">{{ r.capacity or 'N/A' }}</span></td>
+              <td>
+                {% if r.website_url %}
+                  <span class="text-emerald" style="font-size: 0.8125rem;">&check; Yes</span>
+                {% else %}
+                  <span class="text-light" style="font-size: 0.8125rem;">&mdash;</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if preview_data.rows|length > 15 %}
+      <div style="padding: 0.75rem 1.25rem; background: var(--bg-surface); text-align: center; font-size: 0.875rem; color: var(--text-muted); border-top: 1px solid var(--border-color);">
+        Showing first 15 of {{ preview_data.total_rows }} rows parsed from uploaded CSV.
+      </div>
+    {% endif %}
+
+    <!-- Confirm Commit Form -->
+    <div style="padding: 1.5rem; background-color: var(--bg-surface); border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <div>
+        <div style="font-weight: 600; color: var(--primary-dark);">Ready to import {{ preview_data.new_count }} new facilities?</div>
+        <div class="text-muted" style="font-size: 0.85rem;">The {{ preview_data.duplicate_count }} duplicates will be safely skipped to prevent record churn.</div>
+      </div>
+
+      <form method="POST" action="{{ url_for('admin_csv_import_confirm') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="staging_token" value="{{ staging_token }}">
+        <button type="submit" class="btn btn-primary" {% if preview_data.new_count == 0 %}disabled{% endif %}>
+          Confirm &amp; Commit {{ preview_data.new_count }} Facilities
+        </button>
+      </form>
+    </div>
+  </div>
+{% endif %}
+
+<!-- Schema Reference Card -->
+<div class="admin-card">
+  <div class="admin-card-header">
+    <h3 class="admin-card-title">CSV Column Schema Reference</h3>
+    <span class="badge-outline">CPCB Ingestion Specs</span>
+  </div>
+
+  <div style="padding: 1.25rem;">
+    <p class="text-muted" style="font-size: 0.875rem; margin-bottom: 1rem;">
+      The CSV header must include the following recognized column names. Both CPCB research naming and direct database naming conventions are automatically mapped:
+    </p>
+
+    <div class="table-responsive">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Expected CSV Column</th>
+            <th>Alternate Header</th>
+            <th>MySQL Target</th>
+            <th>Required?</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>name</code></td>
+            <td><code>centre_name</code></td>
+            <td><code>centre_name</code></td>
+            <td><strong style="color: #b91c1c;">Yes</strong></td>
+            <td>Enterprise or facility name</td>
+          </tr>
+          <tr>
+            <td><code>state</code></td>
+            <td><code>state_name</code></td>
+            <td><code>state</code></td>
+            <td><strong style="color: #b91c1c;">Yes</strong></td>
+            <td>Indian State or Union Territory</td>
+          </tr>
+          <tr>
+            <td><code>city_district</code></td>
+            <td><code>city</code></td>
+            <td><code>city</code></td>
+            <td><strong style="color: #b91c1c;">Yes</strong></td>
+            <td>City or District name</td>
+          </tr>
+          <tr>
+            <td><code>address</code></td>
+            <td><code>facility_address</code></td>
+            <td><code>address</code></td>
+            <td><strong style="color: #b91c1c;">Yes</strong></td>
+            <td>Full street or industrial area address</td>
+          </tr>
+          <tr>
+            <td><code>capacity_mta</code></td>
+            <td><code>capacity</code></td>
+            <td><code>capacity_mta</code></td>
+            <td>No</td>
+            <td>Metric tons per annum throughput</td>
+          </tr>
+          <tr>
+            <td><code>type</code></td>
+            <td><code>centre_type</code></td>
+            <td><code>centre_type</code></td>
+            <td>No</td>
+            <td>Dismantler or Recycler classification</td>
+          </tr>
+          <tr>
+            <td><code>website_url</code></td>
+            <td><code>website</code></td>
+            <td><code>website_url</code></td>
+            <td>No</td>
+            <td>Official domain portal URL</td>
+          </tr>
+          <tr>
+            <td><code>latitude</code> / <code>longitude</code></td>
+            <td><code>lat</code> / <code>lng</code></td>
+            <td><code>latitude</code> / <code>longitude</code></td>
+            <td>No</td>
+            <td>Decimal GPS coordinates</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

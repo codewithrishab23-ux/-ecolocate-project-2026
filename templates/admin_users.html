@@ -1,0 +1,134 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Manage Registered Users | EcoLocate Admin{% endblock %}
+
+{% block breadcrumb %}
+  <a href="{{ url_for('admin_dashboard') }}">Control Panel</a>
+  <span class="admin-breadcrumb-sep">/</span>
+  <span class="admin-breadcrumb-active">User Accounts</span>
+{% endblock %}
+
+{% block content %}
+<div class="admin-page-header">
+  <div>
+    <h1 class="admin-page-title">Community Member Accounts</h1>
+    <p class="admin-page-subtitle">Inspect registered citizen profiles, track registration activity, and manage account statuses.</p>
+  </div>
+  <div class="admin-page-actions">
+    <span class="badge-status badge-active">{{ total_users }} Total Users</span>
+  </div>
+</div>
+
+<!-- Search Bar -->
+<div class="admin-filter-card">
+  <form method="GET" action="{{ url_for('admin_users') }}" class="admin-filter-form">
+    <div class="admin-filter-field flex-2">
+      <label for="user-search" class="admin-filter-label">Search by Member Name or Email</label>
+      <div class="input-with-icon">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        <input type="text" id="user-search" name="q" class="admin-input" placeholder="Search full name, email address..." value="{{ current_query or '' }}">
+      </div>
+    </div>
+
+    <div class="admin-filter-field">
+      <label for="status-filter" class="admin-filter-label">Account Status</label>
+      <select id="status-filter" name="status" class="admin-select" onchange="this.form.submit()">
+        <option value="">All Accounts</option>
+        <option value="active" {% if current_status == 'active' %}selected{% endif %}>Active Only</option>
+        <option value="inactive" {% if current_status == 'inactive' %}selected{% endif %}>Deactivated Only</option>
+      </select>
+    </div>
+
+    <div class="admin-filter-actions">
+      <button type="submit" class="btn btn-primary btn-sm">Search</button>
+      <a href="{{ url_for('admin_users') }}" class="btn btn-ghost btn-sm">Reset</a>
+    </div>
+  </form>
+</div>
+
+<!-- User Table Card -->
+<div class="admin-card">
+  <div class="admin-card-header">
+    <div>
+      <h3 class="admin-card-title">Registered Member Directory</h3>
+      <p class="admin-card-subtitle">Showing {{ users|length }} of {{ total_users }} registered accounts</p>
+    </div>
+    <span class="badge-outline">Privacy Protected: No Passwords Exposable</span>
+  </div>
+
+  {% if users %}
+    <div class="table-responsive">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th style="width: 60px;">ID</th>
+            <th>Member Name</th>
+            <th>Email Address</th>
+            <th>Registration Date</th>
+            <th>Calculations Saved</th>
+            <th>Account Status</th>
+            <th style="text-align: right; width: 140px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+            <tr>
+              <td class="font-mono text-muted">#{{ u.id }}</td>
+              <td>
+                <div class="font-semibold text-dark">{{ u.full_name }}</div>
+                <small class="text-muted">Standard Community Member</small>
+              </td>
+              <td>
+                <span class="font-mono text-muted" style="font-size: 0.875rem;">{{ u.email }}</span>
+              </td>
+              <td>
+                <div class="font-medium text-dark">
+                  {{ u.created_at.strftime('%d %b %Y') if u.created_at else 'Recent' }}
+                </div>
+                <small class="text-muted">
+                  {{ u.created_at.strftime('%H:%M UTC') if u.created_at else '' }}
+                </small>
+              </td>
+              <td>
+                <span class="admin-pill-neutral font-mono">
+                  {{ u.calculation_count or 0 }} logs ({{ u.total_points or 0 }} pts)
+                </span>
+              </td>
+              <td>
+                {% if u.is_active %}
+                  <span class="badge-status badge-active">Active</span>
+                {% else %}
+                  <span class="badge-status badge-inactive">Deactivated</span>
+                {% endif %}
+              </td>
+              <td style="text-align: right;">
+                <div class="admin-actions-group">
+                  <a href="{{ url_for('admin_users_view', user_id=u.id) }}" class="btn-icon" title="View Member Profile">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                  </a>
+                  <form method="POST" action="{{ url_for('admin_users_toggle_status', user_id=u.id) }}" style="display: inline;" onsubmit="return confirm('Change status for {{ u.full_name|escape }} ({{ u.email|escape }})?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn-icon {% if u.is_active %}btn-icon-warning{% else %}btn-icon-edit{% endif %}" title="{% if u.is_active %}Deactivate Account{% else %}Re-activate Account{% endif %}">
+                      {% if u.is_active %}
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                      {% else %}
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      {% endif %}
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <h3>No user accounts match your criteria</h3>
+      <p class="text-muted">No registered member found matching "{{ current_query }}".</p>
+      <a href="{{ url_for('admin_users') }}" class="btn btn-outline btn-sm" style="margin-top: 1rem;">View All Users</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

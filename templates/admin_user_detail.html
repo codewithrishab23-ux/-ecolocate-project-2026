@@ -1,0 +1,154 @@
+{% extends "admin_base.html" %}
+
+{% block title %}User Account #{{ user.id }}: {{ user.full_name }} | EcoLocate Admin{% endblock %}
+
+{% block breadcrumb %}
+  <a href="{{ url_for('admin_dashboard') }}">Control Panel</a>
+  <span class="admin-breadcrumb-sep">/</span>
+  <a href="{{ url_for('admin_users') }}">User Accounts</a>
+  <span class="admin-breadcrumb-sep">/</span>
+  <span class="admin-breadcrumb-active">{{ user.full_name }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="admin-page-header">
+  <div>
+    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.35rem;">
+      <span class="admin-pill-neutral">User ID #{{ user.id }}</span>
+      {% if user.is_active %}
+        <span class="badge-status badge-active">Account Active</span>
+      {% else %}
+        <span class="badge-status badge-inactive">Account Deactivated</span>
+      {% endif %}
+    </div>
+    <h1 class="admin-page-title">{{ user.full_name }}</h1>
+    <p class="admin-page-subtitle">{{ user.email }} &bull; Registered on {{ user.created_at.strftime('%d %B %Y at %H:%M UTC') if user.created_at else 'Recent' }}</p>
+  </div>
+  <div class="admin-page-actions">
+    <form method="POST" action="{{ url_for('admin_users_toggle_status', user_id=user.id) }}" style="display: inline;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if user.is_active %}
+        <button type="submit" class="btn btn-outline btn-sm" style="color: #d97706; border-color: #fde68a;">
+          Deactivate Account
+        </button>
+      {% else %}
+        <button type="submit" class="btn btn-primary btn-sm">
+          Re-activate Account
+        </button>
+      {% endif %}
+    </form>
+    <a href="{{ url_for('admin_users') }}" class="btn btn-ghost btn-sm">&larr; Back to Users</a>
+  </div>
+</div>
+
+<div class="admin-detail-grid">
+  <!-- Left Column: User Profile Overview -->
+  <div class="admin-card">
+    <div class="admin-card-header">
+      <h3 class="admin-card-title">Account Profile Overview</h3>
+      <span class="badge-outline">Security Verified</span>
+    </div>
+
+    <div class="detail-rows">
+      <div class="detail-row">
+        <div class="detail-label">User ID</div>
+        <div class="detail-value font-mono">#{{ user.id }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Full Name</div>
+        <div class="detail-value font-semibold text-dark">{{ user.full_name }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Email Address</div>
+        <div class="detail-value font-mono text-dark">{{ user.email }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Account Status</div>
+        <div class="detail-value">
+          {% if user.is_active %}
+            <span class="badge-status badge-active">Active (Can log in &amp; calculate)</span>
+          {% else %}
+            <span class="badge-status badge-inactive">Deactivated (Login rejected)</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Registration Timestamp</div>
+        <div class="detail-value font-mono text-muted">
+          {{ user.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if user.created_at else 'N/A' }}
+        </div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Password Protection</div>
+        <div class="detail-value font-mono" style="color: #059669;">
+          &check; Werkzeug scrypt/pbkdf2 Hashed (Private &amp; Redacted)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Rewards Activity Summary -->
+  <div class="admin-card">
+    <div class="admin-card-header">
+      <h3 class="admin-card-title">EcoRewards Activity Summary</h3>
+      <span class="badge-status badge-active">{{ history|length }} Calculations</span>
+    </div>
+
+    <div style="padding: 1.25rem;">
+      <div class="admin-stats-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 1.5rem;">
+        <div class="admin-stat-card">
+          <div class="admin-stat-info">
+            <div class="admin-stat-val font-mono" style="color: #10b981;">{{ total_points }}</div>
+            <div class="admin-stat-lbl">Accumulated EcoPoints</div>
+          </div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-info">
+            <div class="admin-stat-val font-mono">{{ total_devices_recycled }}</div>
+            <div class="admin-stat-lbl">Devices Logged</div>
+          </div>
+        </div>
+      </div>
+
+      {% if history %}
+        <h4 style="font-size: 0.9375rem; font-weight: 600; margin-bottom: 0.75rem;">Calculation History Records:</h4>
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Device</th>
+                <th>Qty</th>
+                <th>Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for h in history %}
+                <tr>
+                  <td class="font-mono text-muted" style="font-size: 0.8125rem;">
+                    {{ h.created_at.strftime('%Y-%m-%d') if h.created_at else 'Recent' }}
+                  </td>
+                  <td class="font-medium text-dark">{{ h.device_name }}</td>
+                  <td class="font-mono">{{ h.quantity }}</td>
+                  <td class="font-mono font-semibold text-emerald" style="color: #059669;">
+                    +{{ h.total_points }} pts
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-muted" style="font-size: 0.875rem; text-align: center; padding: 1.5rem 0;">
+          This user has not saved any reward calculations to their profile yet.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

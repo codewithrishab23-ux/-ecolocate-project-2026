@@ -1,0 +1,200 @@
+{% extends "admin_base.html" %}
+
+{% block title %}{{ centre.centre_name }} | EcoLocate Admin{% endblock %}
+
+{% block breadcrumb %}
+  <a href="{{ url_for('admin_dashboard') }}">Control Panel</a>
+  <span class="admin-breadcrumb-sep">/</span>
+  <a href="{{ url_for('admin_centres') }}">Recycling Centres</a>
+  <span class="admin-breadcrumb-sep">/</span>
+  <span class="admin-breadcrumb-active">{{ centre.centre_name }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="admin-page-header">
+  <div>
+    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.35rem;">
+      <span class="admin-pill-neutral">ID #{{ centre.id }}</span>
+      <span class="badge-status badge-active">{{ centre.centre_type or 'Authorised dismantler/recycler' }}</span>
+    </div>
+    <h1 class="admin-page-title">{{ centre.centre_name }}</h1>
+    <p class="admin-page-subtitle">{{ centre.city }}, {{ centre.state }} &bull; Source: {{ centre.source or 'CPCB Registered List' }}</p>
+  </div>
+  <div class="admin-page-actions">
+    <a href="{{ url_for('admin_centres_edit', centre_id=centre.id) }}" class="btn btn-primary btn-sm">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+      Edit Facility
+    </a>
+    <form method="POST" action="{{ url_for('admin_centres_delete', centre_id=centre.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to permanently delete this facility? This action cannot be undone.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fca5a5;">
+        Delete Facility
+      </button>
+    </form>
+    <a href="{{ url_for('admin_centres') }}" class="btn btn-ghost btn-sm">&larr; Back</a>
+  </div>
+</div>
+
+<div class="admin-detail-grid">
+  <!-- Left Column: Details -->
+  <div class="admin-card">
+    <div class="admin-card-header">
+      <h3 class="admin-card-title">Comprehensive Facility Specifications</h3>
+      <span class="badge-outline">Database Record</span>
+    </div>
+
+    <div class="detail-rows">
+      <div class="detail-row">
+        <div class="detail-label">Facility Name</div>
+        <div class="detail-value font-semibold text-dark">{{ centre.centre_name }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">State / UT</div>
+        <div class="detail-value">{{ centre.state }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">City / District</div>
+        <div class="detail-value">{{ centre.city }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Physical Address</div>
+        <div class="detail-value" style="white-space: pre-line;">{{ centre.address }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Annual Capacity</div>
+        <div class="detail-value font-mono">
+          {% if centre.capacity_mta %}
+            <span class="badge-status badge-active">{{ centre.capacity_mta }}</span>
+          {% else %}
+            <span class="text-muted">Unspecified</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Classification</div>
+        <div class="detail-value">{{ centre.centre_type or 'Authorised dismantler/recycler' }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Official Website</div>
+        <div class="detail-value">
+          {% if centre.website_url %}
+            <a href="{{ centre.website_url }}" target="_blank" rel="noopener noreferrer" class="link-external">
+              {{ centre.website_url }} &nearr;
+            </a>
+          {% else %}
+            <span class="badge-status badge-inactive">None on record</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Website Verification</div>
+        <div class="detail-value">{{ centre.website_verification or 'Pending audit verification' }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Audit Checked Date</div>
+        <div class="detail-value font-mono">{{ centre.website_checked_date or 'N/A' }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Helpline Phone</div>
+        <div class="detail-value">
+          {% if centre.phone_number %}
+            <a href="tel:{{ centre.phone_number }}" class="font-mono text-dark">{{ centre.phone_number }}</a>
+          {% else %}
+            <span class="text-muted font-italic">NULL (No verified phone recorded)</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Official Email</div>
+        <div class="detail-value">
+          {% if centre.email %}
+            <a href="mailto:{{ centre.email }}" class="font-mono text-dark">{{ centre.email }}</a>
+          {% else %}
+            <span class="text-muted font-italic">NULL (No verified email recorded)</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">GPS Latitude</div>
+        <div class="detail-value font-mono">{{ centre.latitude if centre.latitude is not none else 'NULL' }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">GPS Longitude</div>
+        <div class="detail-value font-mono">{{ centre.longitude if centre.longitude is not none else 'NULL' }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-label">Record Ingested</div>
+        <div class="detail-value font-mono text-muted">
+          {{ centre.created_at.strftime('%Y-%m-%d %H:%M:%S') if centre.created_at else 'Phase 3 Ingestion' }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Navigation & Accepted Devices -->
+  <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+    <!-- Map / Navigation Card -->
+    <div class="admin-card">
+      <div class="admin-card-header">
+        <h3 class="admin-card-title">Geospatial Routing</h3>
+      </div>
+      <div style="padding: 1.25rem;">
+        {% if centre.latitude and centre.longitude %}
+          <div class="badge-status badge-active" style="margin-bottom: 1rem;">
+            &check; Verified Leaflet Map Coordinates
+          </div>
+          <p class="text-muted" style="font-size: 0.875rem; margin-bottom: 1rem;">
+            This facility has verified coordinates and is plotted on the public Leaflet map.
+          </p>
+          <a href="https://www.google.com/maps/dir/?api=1&destination={{ centre.latitude }},{{ centre.longitude }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-full btn-sm">
+            Open in Google Maps &nearr;
+          </a>
+        {% else %}
+          <div class="badge-status badge-inactive" style="margin-bottom: 1rem;">
+            Pending Coordinates
+          </div>
+          <p class="text-muted" style="font-size: 0.875rem; margin-bottom: 1rem;">
+            Coordinates are currently NULL. Address-based lookup will be used for driving directions.
+          </p>
+          <a href="https://www.google.com/maps/search/?api=1&query={{ (centre.centre_name ~ ' ' ~ centre.address)|urlencode }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-full btn-sm">
+            Search Address on Google Maps &nearr;
+          </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Accepted Devices Card -->
+    <div class="admin-card">
+      <div class="admin-card-header">
+        <h3 class="admin-card-title">Accepted Electronic Devices</h3>
+      </div>
+      <div style="padding: 1.25rem;">
+        {% if accepted_devices %}
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            {% for dev in accepted_devices %}
+              <span class="admin-pill-neutral font-medium">{{ dev }}</span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted" style="font-size: 0.875rem;">
+            All standard electronic waste categories accepted in accordance with CPCB authorized dismantler guidelines.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
