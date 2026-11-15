@@ -16,19 +16,59 @@ document.addEventListener('DOMContentLoaded', () => {
 function initNavigation() {
   const mobileToggle = document.querySelector('.mobile-toggle');
   const siteHeader = document.querySelector('.site-header');
+  const mobileBackdrop = document.getElementById('mobileNavBackdrop');
+  const navMenuWrapper = document.getElementById('navMenuWrapper');
+
+  function openMobileMenu() {
+    if (mobileToggle) mobileToggle.setAttribute('aria-expanded', 'true');
+    if (siteHeader) siteHeader.classList.add('mobile-nav-active');
+    document.body.classList.add('mobile-nav-open');
+  }
+
+  function closeMobileMenu() {
+    if (mobileToggle) mobileToggle.setAttribute('aria-expanded', 'false');
+    if (siteHeader) siteHeader.classList.remove('mobile-nav-active');
+    document.body.classList.remove('mobile-nav-open');
+  }
 
   if (mobileToggle && siteHeader) {
-    mobileToggle.addEventListener('click', () => {
-      const isExpanded = mobileToggle.getAttribute('aria-expanded') === 'true';
-      mobileToggle.setAttribute('aria-expanded', !isExpanded);
-      siteHeader.classList.toggle('mobile-nav-active');
+    mobileToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isExpanded = siteHeader.classList.contains('mobile-nav-active');
+      if (isExpanded) {
+        closeMobileMenu();
+      } else {
+        openMobileMenu();
+      }
+    });
+
+    if (mobileBackdrop) {
+      mobileBackdrop.addEventListener('click', closeMobileMenu);
+    }
+
+    // Close when clicking nav links on mobile
+    if (navMenuWrapper) {
+      const interactiveLinks = navMenuWrapper.querySelectorAll('a, button');
+      interactiveLinks.forEach(link => {
+        link.addEventListener('click', () => {
+          if (window.innerWidth <= 768) {
+            closeMobileMenu();
+          }
+        });
+      });
+    }
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && siteHeader.classList.contains('mobile-nav-active')) {
+        closeMobileMenu();
+      }
     });
 
     // Close mobile menu when clicking outside
     document.addEventListener('click', (e) => {
       if (!siteHeader.contains(e.target) && siteHeader.classList.contains('mobile-nav-active')) {
-        siteHeader.classList.remove('mobile-nav-active');
-        mobileToggle.setAttribute('aria-expanded', 'false');
+        closeMobileMenu();
       }
     });
   }
@@ -113,6 +153,20 @@ function initCentresDirectory() {
 
       // Load all verified facility coordinates from backend API
       loadMapFacilities();
+
+      // Mobile responsiveness: Resize & orientation change handler
+      window.addEventListener('resize', () => {
+        if (map) {
+          map.invalidateSize();
+        }
+      });
+      window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+          if (map) {
+            map.invalidateSize();
+          }
+        }, 250);
+      });
 
       // Reset Map View Button
       if (resetMapViewBtn) {
