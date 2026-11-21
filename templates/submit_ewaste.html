@@ -1,0 +1,382 @@
+{% extends 'base.html' %}
+
+{% block title %}Submit E-Waste & Earn Points | EcoLocate{% endblock %}
+
+{% block content %}
+<div class="page-header" style="background: linear-gradient(135deg, #0e3b2e 0%, #155e46 100%); color: #fff; padding: 2.5rem 0;">
+  <div class="container">
+    <div style="max-width: 800px; margin: 0 auto; text-align: center;">
+      <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; margin-bottom: 0.75rem; display: inline-block;">
+        Responsible Recycling Initiative
+      </span>
+      <h1 style="font-size: 2.25rem; font-weight: 800; margin-bottom: 0.75rem; letter-spacing: -0.02em;">
+        Submit Your E-Waste for Certified Collection
+      </h1>
+      <p style="font-size: 1.05rem; color: #d1fae5; line-height: 1.6;">
+        Earn reward points every time you responsibly dispose of your electronics. Our platform welcomes SGT University students, other college students, and citizens across India.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="container" style="padding: 2.5rem 1rem;">
+  <div style="max-width: 860px; margin: 0 auto;">
+
+    <!-- Repeat Submission Points Banner -->
+    <div class="card" style="background: #f0fdf4; border: 1px solid #bbf7d0; margin-bottom: 2rem; padding: 1.5rem; border-radius: 12px;">
+      <div style="display: flex; gap: 1rem; align-items: flex-start;">
+        <div style="background: #10b981; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-weight: 700; font-size: 1.25rem;">
+          ★
+        </div>
+        <div>
+          <h3 style="font-size: 1.15rem; font-weight: 700; color: #0e3b2e; margin-bottom: 0.35rem;">
+            Repeat Submission Points System
+          </h3>
+          <p style="font-size: 0.92rem; color: #065f46; margin-bottom: 0.75rem; line-height: 1.5;">
+            You earn points <strong>every single time</strong> you submit e-waste! There are no limits to how many submissions you can make. Points are credited based on verified items per submission:
+          </p>
+          <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.85rem;">
+            <span style="background: white; border: 1px solid #86efac; padding: 0.3rem 0.65rem; border-radius: 6px; color: #047857; font-weight: 600;">1 item = 5 pts</span>
+            <span style="background: white; border: 1px solid #86efac; padding: 0.3rem 0.65rem; border-radius: 6px; color: #047857; font-weight: 600;">2 items = 15 pts</span>
+            <span style="background: white; border: 1px solid #86efac; padding: 0.3rem 0.65rem; border-radius: 6px; color: #047857; font-weight: 600;">3–4 items = 25 pts</span>
+            <span style="background: white; border: 1px solid #86efac; padding: 0.3rem 0.65rem; border-radius: 6px; color: #047857; font-weight: 600;">5–9 items = 40 pts</span>
+            <span style="background: white; border: 1px solid #86efac; padding: 0.3rem 0.65rem; border-radius: 6px; color: #047857; font-weight: 600;">10+ items = 60 pts</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('submit_ewaste') }}" enctype="multipart/form-data" id="ewasteSubmitForm" class="card" style="padding: 2rem; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.06);">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+      <!-- SECTION 1: Submitter Classification -->
+      <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 1.5rem; margin-bottom: 1.5rem;">
+        <h2 style="font-size: 1.25rem; font-weight: 700; color: #111827; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+          <span style="background: #0e3b2e; color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem;">1</span>
+          Submitter Information
+        </h2>
+        <p style="font-size: 0.9rem; color: #6b7280; margin-bottom: 1.25rem;">
+          Tell us whether you are a university student or submitting as an individual citizen.
+        </p>
+
+        <div style="margin-bottom: 1.25rem;">
+          <label style="display: block; font-weight: 600; color: #374151; margin-bottom: 0.5rem;">
+            Are you a university student? <span style="color: #ef4444;">*</span>
+          </label>
+          <div style="display: flex; gap: 1.5rem; align-items: center;">
+            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.95rem;">
+              <input type="radio" name="is_student" value="yes" id="studentYes" {% if (form_data and form_data.get('is_student') == 'yes') or not form_data %}checked{% endif %} style="accent-color: #10b981; width: 18px; height: 18px;">
+              <span>Yes, I am a university student</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.95rem;">
+              <input type="radio" name="is_student" value="no" id="studentNo" {% if form_data and form_data.get('is_student') == 'no' %}checked{% endif %} style="accent-color: #10b981; width: 18px; height: 18px;">
+              <span>No, general citizen</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Student Dynamic Fields -->
+        <div id="studentFields" style="{% if form_data and form_data.get('is_student') == 'no' %}display: none;{% endif %} background: #f9fafb; padding: 1.25rem; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 1rem;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <label for="student_name" style="display: block; font-weight: 600; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+                Student Full Name <span style="color: #ef4444;">*</span>
+              </label>
+              <input type="text" id="student_name" name="student_name" class="form-control" placeholder="e.g. Yogesh Sharma" value="{{ form_data.get('student_name') if form_data else user_prefill.get('full_name', '') }}">
+            </div>
+
+            <div>
+              <label for="university_type" style="display: block; font-weight: 600; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+                University Selection <span style="color: #ef4444;">*</span>
+              </label>
+              <select id="university_type" name="university_type" class="form-control">
+                <option value="SGT University" {% if not form_data or form_data.get('university_type') == 'SGT University' %}selected{% endif %}>SGT University (Gurugram)</option>
+                <option value="Other University" {% if form_data and form_data.get('university_type') == 'Other University' %}selected{% endif %}>Other University / College</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="otherUniversityWrapper" style="{% if not form_data or form_data.get('university_type') != 'Other University' %}display: none;{% endif %} margin-bottom: 1rem;">
+            <label for="university_name_other" style="display: block; font-weight: 600; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+              University / College Name <span style="color: #ef4444;">*</span>
+            </label>
+            <input type="text" id="university_name_other" name="university_name_other" class="form-control" placeholder="e.g. Delhi Technological University" value="{{ form_data.get('university_name_other', '') if form_data else '' }}">
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <div>
+              <label for="roll_number" style="display: block; font-weight: 600; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+                Roll Number <span style="color: #9ca3af; font-weight: 400;">(Optional)</span>
+              </label>
+              <input type="text" id="roll_number" name="roll_number" class="form-control" placeholder="e.g. 241306039" value="{{ form_data.get('roll_number', '') if form_data else '' }}">
+            </div>
+            <div>
+              <label for="course_dept" style="display: block; font-weight: 600; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+                Course / Department <span style="color: #9ca3af; font-weight: 400;">(Optional)</span>
+              </label>
+              <input type="text" id="course_dept" name="course_dept" class="form-control" placeholder="e.g. BCA AI & ML" value="{{ form_data.get('course_dept', '') if form_data else '' }}">
+            </div>
+          </div>
+        </div>
+
+        <!-- Non-Student Dynamic Fields -->
+        <div id="nonStudentFields" style="{% if not form_data or form_data.get('is_student') != 'no' %}display: none;{% endif %} background: #f9fafb; padding: 1.25rem; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 1rem;">
+          <div>
+            <label for="full_name" style="display: block; font-weight: 600; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+              Full Name <span style="color: #ef4444;">*</span>
+            </label>
+            <input type="text" id="full_name" name="full_name" class="form-control" placeholder="e.g. Rajesh Kumar" value="{{ form_data.get('full_name') if form_data else user_prefill.get('full_name', '') }}">
+          </div>
+        </div>
+
+        <!-- Contact details -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+          <div>
+            <label for="phone_number" style="display: block; font-weight: 600; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+              Phone Number <span style="color: #ef4444;">*</span>
+            </label>
+            <input type="tel" id="phone_number" name="phone_number" class="form-control" placeholder="e.g. 9876543210" required value="{{ form_data.get('phone_number', '') if form_data else '' }}">
+          </div>
+          <div>
+            <label for="email" style="display: block; font-weight: 600; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+              Email Address <span style="color: #9ca3af; font-weight: 400;">(Optional)</span>
+            </label>
+            <input type="email" id="email" name="email" class="form-control" placeholder="e.g. user@example.com" value="{{ form_data.get('email') if form_data else user_prefill.get('email', '') }}">
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 2: Dynamic E-Waste Items (Multi-Item Support) -->
+      <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 1.5rem; margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+          <h2 style="font-size: 1.25rem; font-weight: 700; color: #111827; display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+            <span style="background: #0e3b2e; color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem;">2</span>
+            E-Waste Item Details
+          </h2>
+          <button type="button" id="addItemBtn" class="btn btn-outline btn-sm" style="font-size: 0.85rem;">
+            + Add Another Item
+          </button>
+        </div>
+        <p style="font-size: 0.9rem; color: #6b7280; margin-bottom: 1.25rem;">
+          Specify each electronic device or accessory you wish to recycle. You can add multiple items in one submission.
+        </p>
+
+        <!-- Container for Dynamic Items -->
+        <div id="itemsContainer">
+          <div class="item-row card" style="background: #fdfdfd; border: 1px solid #e5e7eb; padding: 1.25rem; border-radius: 8px; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+              <span class="item-title" style="font-weight: 700; font-size: 0.92rem; color: #0e3b2e;">Item #1</span>
+              <button type="button" class="remove-item-btn btn btn-ghost btn-sm" style="color: #ef4444; font-size: 0.8rem; display: none;">
+                Remove
+              </button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 0.75rem;">
+              <div>
+                <label style="display: block; font-weight: 600; font-size: 0.85rem; color: #374151; margin-bottom: 0.35rem;">
+                  Category <span style="color: #ef4444;">*</span>
+                </label>
+                <select name="item_category[]" class="form-control" required>
+                  {% for cat in categories %}
+                    <option value="{{ cat }}">{{ cat }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label style="display: block; font-weight: 600; font-size: 0.85rem; color: #374151; margin-bottom: 0.35rem;">
+                  Item Name / Model <span style="color: #ef4444;">*</span>
+                </label>
+                <input type="text" name="item_name[]" class="form-control" placeholder="e.g. Dell Inspiron 15 / iPhone 11" required>
+              </div>
+
+              <div>
+                <label style="display: block; font-weight: 600; font-size: 0.85rem; color: #374151; margin-bottom: 0.35rem;">
+                  Quantity <span style="color: #ef4444;">*</span>
+                </label>
+                <input type="number" name="item_quantity[]" class="form-control" min="1" value="1" required>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+              <div>
+                <label style="display: block; font-weight: 600; font-size: 0.85rem; color: #374151; margin-bottom: 0.35rem;">
+                  Condition <span style="color: #ef4444;">*</span>
+                </label>
+                <select name="item_condition[]" class="form-control">
+                  {% for cond in conditions %}
+                    <option value="{{ cond }}">{{ cond }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label style="display: block; font-weight: 600; font-size: 0.85rem; color: #374151; margin-bottom: 0.35rem;">
+                  Approx. Weight (kg) <span style="color: #9ca3af; font-weight: 400;">(Optional)</span>
+                </label>
+                <input type="number" step="0.1" name="item_weight[]" class="form-control" placeholder="e.g. 2.5">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Image Upload -->
+        <div style="margin-top: 1.25rem; background: #fafafa; border: 2px dashed #d1d5db; border-radius: 8px; padding: 1.5rem; text-align: center;">
+          <svg width="36" height="36" fill="none" stroke="#9ca3af" viewBox="0 0 24 24" style="margin: 0 auto 0.5rem auto;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg>
+          <label for="item_images" style="display: block; font-weight: 600; color: #374151; margin-bottom: 0.25rem; cursor: pointer;">
+            Upload Item Photos <span style="color: #9ca3af; font-weight: 400;">(Optional)</span>
+          </label>
+          <p style="font-size: 0.82rem; color: #6b7280; margin-bottom: 0.75rem;">
+            Accepted formats: JPG, JPEG, PNG, WEBP (Max 5MB each). Photos assist quick verification.
+          </p>
+          <input type="file" id="item_images" name="item_images" class="form-control" multiple accept=".jpg,.jpeg,.png,.webp" style="max-width: 380px; margin: 0 auto;">
+        </div>
+      </div>
+
+      <!-- SECTION 3: Collection Address -->
+      <div style="margin-bottom: 1.75rem;">
+        <h2 style="font-size: 1.25rem; font-weight: 700; color: #111827; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+          <span style="background: #0e3b2e; color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem;">3</span>
+          Collection Address &amp; Logistics
+        </h2>
+        <p style="font-size: 0.9rem; color: #6b7280; margin-bottom: 1.25rem;">
+          Provide the physical location where certified collection partners can schedule pickup or drop-off coordination.
+        </p>
+
+        <div style="margin-bottom: 1rem;">
+          <label for="address" style="display: block; font-weight: 600; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+            Street Address / Campus Hostel / House No. <span style="color: #ef4444;">*</span>
+          </label>
+          <input type="text" id="address" name="address" class="form-control" placeholder="e.g. Block C, Room 204, SGT University Campus, Budhera" required value="{{ form_data.get('address', '') if form_data else '' }}">
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+          <div>
+            <label for="city" style="display: block; font-weight: 600; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+              City <span style="color: #ef4444;">*</span>
+            </label>
+            <input type="text" id="city" name="city" class="form-control" placeholder="e.g. Gurugram" required value="{{ form_data.get('city', '') if form_data else '' }}">
+          </div>
+          <div>
+            <label for="state" style="display: block; font-weight: 600; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+              State <span style="color: #ef4444;">*</span>
+            </label>
+            <input type="text" id="state" name="state" class="form-control" placeholder="e.g. Haryana" required value="{{ form_data.get('state', '') if form_data else '' }}">
+          </div>
+          <div>
+            <label for="pincode" style="display: block; font-weight: 600; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+              PIN Code <span style="color: #ef4444;">*</span>
+            </label>
+            <input type="text" id="pincode" name="pincode" class="form-control" placeholder="e.g. 122505" required value="{{ form_data.get('pincode', '') if form_data else '' }}">
+          </div>
+        </div>
+
+        <div>
+          <label for="additional_message" style="display: block; font-weight: 600; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+            Additional Notes or Instructions <span style="color: #9ca3af; font-weight: 400;">(Optional)</span>
+          </label>
+          <textarea id="additional_message" name="additional_message" class="form-control" rows="2" placeholder="e.g. Best time for pickup is weekday afternoons; gate pass required.">{{ form_data.get('additional_message', '') if form_data else '' }}</textarea>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e5e7eb; padding-top: 1.5rem;">
+        <a href="{{ url_for('index') }}" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2rem; font-weight: 700; font-size: 1rem;">
+          Submit E-Waste &amp; Claim Points
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Toggle student vs non-student view
+  const studentYes = document.getElementById('studentYes');
+  const studentNo = document.getElementById('studentNo');
+  const studentFields = document.getElementById('studentFields');
+  const nonStudentFields = document.getElementById('nonStudentFields');
+  const studentNameInput = document.getElementById('student_name');
+  const fullNameInput = document.getElementById('full_name');
+  const uniType = document.getElementById('university_type');
+  const otherUniWrapper = document.getElementById('otherUniversityWrapper');
+
+  function updateStudentView() {
+    if (studentYes.checked) {
+      studentFields.style.display = 'block';
+      nonStudentFields.style.display = 'none';
+      studentNameInput.required = true;
+      fullNameInput.required = false;
+    } else {
+      studentFields.style.display = 'none';
+      nonStudentFields.style.display = 'block';
+      studentNameInput.required = false;
+      fullNameInput.required = true;
+    }
+  }
+
+  studentYes.addEventListener('change', updateStudentView);
+  studentNo.addEventListener('change', updateStudentView);
+
+  uniType.addEventListener('change', function() {
+    if (this.value === 'Other University' || this.value === 'Other') {
+      otherUniWrapper.style.display = 'block';
+      document.getElementById('university_name_other').required = true;
+    } else {
+      otherUniWrapper.style.display = 'none';
+      document.getElementById('university_name_other').required = false;
+    }
+  });
+
+  // Dynamic Item Repeater
+  const itemsContainer = document.getElementById('itemsContainer');
+  const addItemBtn = document.getElementById('addItemBtn');
+
+  function updateItemNumbers() {
+    const rows = itemsContainer.querySelectorAll('.item-row');
+    rows.forEach((row, idx) => {
+      row.querySelector('.item-title').textContent = `Item #${idx + 1}`;
+      const removeBtn = row.querySelector('.remove-item-btn');
+      if (rows.length > 1) {
+        removeBtn.style.display = 'inline-block';
+      } else {
+        removeBtn.style.display = 'none';
+      }
+    });
+  }
+
+  addItemBtn.addEventListener('click', function() {
+    const rows = itemsContainer.querySelectorAll('.item-row');
+    const firstRow = rows[0];
+    const clone = firstRow.cloneNode(true);
+
+    // Reset inputs in cloned row
+    clone.querySelector('input[name="item_name[]"]').value = '';
+    clone.querySelector('input[name="item_quantity[]"]').value = '1';
+    clone.querySelector('input[name="item_weight[]"]').value = '';
+
+    // Attach remove event listener
+    clone.querySelector('.remove-item-btn').addEventListener('click', function() {
+      clone.remove();
+      updateItemNumbers();
+    });
+
+    itemsContainer.appendChild(clone);
+    updateItemNumbers();
+  });
+
+  // Attach listener to initial row remove button if present
+  itemsContainer.querySelectorAll('.remove-item-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      btn.closest('.item-row').remove();
+      updateItemNumbers();
+    });
+  });
+
+  updateStudentView();
+</script>
+{% endblock %}

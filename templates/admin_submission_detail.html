@@ -1,0 +1,313 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Verify Submission {{ submission.submission_code }} | EcoLocate Admin{% endblock %}
+
+{% block content %}
+<div class="admin-content-header" style="margin-bottom: 2rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <a href="{{ url_for('admin_submissions') }}" style="color: #059669; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem; margin-bottom: 0.5rem;">
+        &larr; Back to Submissions List
+      </a>
+      <h1 style="font-size: 1.75rem; font-weight: 800; color: #111827; margin-bottom: 0.25rem;">
+        Submission {{ submission.submission_code }}
+      </h1>
+      <p style="font-size: 0.9rem; color: #6b7280;">
+        Submitted on {{ submission.created_at.strftime('%d %B %Y, %I:%M %p') if submission.created_at else 'Recent' }}
+      </p>
+    </div>
+
+    <div>
+      {% if submission.points_approved %}
+        <span class="badge" style="background: #10b981; color: white; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.88rem;">
+          Points Approved ({{ submission.points_awarded }} pts)
+        </span>
+      {% else %}
+        <span class="badge" style="background: #f59e0b; color: white; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.88rem;">
+          Pending Verification
+        </span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem;">
+
+  <!-- Main Column: Item Verification & Points Approval -->
+  <div>
+
+    <!-- 1. ITEM-BY-ITEM VERIFICATION FORM -->
+    <div class="card" style="padding: 1.75rem; border-radius: 10px; margin-bottom: 2rem;">
+      <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin-bottom: 0.5rem;">
+        1. E-Waste Items Verification
+      </h3>
+      <p style="font-size: 0.88rem; color: #6b7280; margin-bottom: 1.25rem;">
+        Inspect submitted items. Adjust accepted quantities and mark any damaged/ineligible items as rejected.
+      </p>
+
+      <form method="POST" action="{{ url_for('admin_submission_detail', submission_id=submission.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="action" value="verify_items"/>
+
+        <div class="table-responsive">
+          <table class="table" style="width: 100%; border-collapse: collapse; margin-bottom: 1.25rem;">
+            <thead>
+              <tr style="border-bottom: 2px solid #e5e7eb; text-align: left; font-size: 0.82rem; color: #6b7280;">
+                <th style="padding: 0.75rem;">Item Description</th>
+                <th style="padding: 0.75rem;">Category</th>
+                <th style="padding: 0.75rem;">Condition</th>
+                <th style="padding: 0.75rem; width: 80px;">Sub. Qty</th>
+                <th style="padding: 0.75rem; width: 100px;">Accepted Qty</th>
+                <th style="padding: 0.75rem; width: 120px;">Status</th>
+                <th style="padding: 0.75rem;">Rejection Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in items %}
+                <tr style="border-bottom: 1px solid #f3f4f6; font-size: 0.88rem;">
+                  <td style="padding: 0.75rem; font-weight: 600; color: #111827;">
+                    <input type="hidden" name="item_id[]" value="{{ item.id }}"/>
+                    {{ item.item_name }}
+                  </td>
+                  <td style="padding: 0.75rem; color: #4b5563;">{{ item.category }}</td>
+                  <td style="padding: 0.75rem;">
+                    <span style="font-size: 0.78rem; padding: 0.2rem 0.45rem; border-radius: 4px; background: #f3f4f6;">
+                      {{ item.condition_state }}
+                    </span>
+                  </td>
+                  <td style="padding: 0.75rem; font-weight: 600;">{{ item.submitted_quantity }}</td>
+                  <td style="padding: 0.75rem;">
+                    <input type="number" name="accepted_qty_{{ item.id }}" class="form-control" min="0" max="{{ item.submitted_quantity * 5 }}" value="{{ item.accepted_quantity if (submission.total_accepted_items > 0 or item.status != 'pending') else item.submitted_quantity }}" style="padding: 0.35rem 0.5rem; font-size: 0.85rem;" {% if submission.points_approved %}disabled{% endif %}>
+                  </td>
+                  <td style="padding: 0.75rem;">
+                    <select name="item_status_{{ item.id }}" class="form-control" style="padding: 0.35rem 0.5rem; font-size: 0.82rem;" {% if submission.points_approved %}disabled{% endif %}>
+                      <option value="pending" {% if item.status == 'pending' %}selected{% endif %}>Pending</option>
+                      <option value="verified" {% if item.status == 'verified' or (item.status == 'pending' and item.accepted_quantity > 0) %}selected{% endif %}>Verified</option>
+                      <option value="rejected" {% if item.status == 'rejected' %}selected{% endif %}>Rejected</option>
+                    </select>
+                  </td>
+                  <td style="padding: 0.75rem;">
+                    <input type="text" name="rejection_reason_{{ item.id }}" class="form-control" placeholder="If rejected, state why" value="{{ item.rejection_reason or '' }}" style="padding: 0.35rem 0.5rem; font-size: 0.82rem;" {% if submission.points_approved %}disabled{% endif %}>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if not submission.points_approved %}
+          <div style="display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn btn-primary btn-sm" style="padding: 0.5rem 1.25rem;">
+              Save Item Verification &amp; Recalculate Points
+            </button>
+          </div>
+        {% else %}
+          <div style="font-size: 0.85rem; color: #6b7280; font-style: italic; text-align: right;">
+            Item quantities are locked because points have already been approved.
+          </div>
+        {% endif %}
+      </form>
+    </div>
+
+    <!-- 2. POINTS CALCULATION & APPROVAL SECTION -->
+    <div class="card" style="padding: 1.75rem; border-radius: 10px; border-left: 4px solid #10b981; margin-bottom: 2rem;">
+      <h3 style="font-size: 1.15rem; font-weight: 700; color: #0e3b2e; margin-bottom: 0.5rem;">
+        2. Repeat Submission Points Approval
+      </h3>
+      <p style="font-size: 0.88rem; color: #4b5563; margin-bottom: 1.25rem;">
+        Points are evaluated per submission based on verified accepted items. Active dynamic tiers determine the default points award.
+      </p>
+
+      <div style="display: flex; gap: 2rem; align-items: center; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
+        <div>
+          <div style="font-size: 0.8rem; color: #047857; text-transform: uppercase; font-weight: 600;">Accepted Quantity</div>
+          <div style="font-size: 1.75rem; font-weight: 800; color: #065f46;">{{ accepted_count }} items</div>
+        </div>
+        <div style="border-left: 1px solid #86efac; padding-left: 2rem;">
+          <div style="font-size: 0.8rem; color: #047857; text-transform: uppercase; font-weight: 600;">Tier Calculated Points</div>
+          <div style="font-size: 1.75rem; font-weight: 800; color: #059669;">{{ preview_points }} points</div>
+        </div>
+        {% if submission.points_approved %}
+          <div style="border-left: 1px solid #86efac; padding-left: 2rem;">
+            <div style="font-size: 0.8rem; color: #047857; text-transform: uppercase; font-weight: 600;">Status</div>
+            <div style="font-size: 1.25rem; font-weight: 700; color: #10b981;">✓ Approved ({{ submission.points_awarded }} pts)</div>
+          </div>
+        {% endif %}
+      </div>
+
+      {% if not submission.points_approved %}
+        <form method="POST" action="{{ url_for('admin_submission_detail', submission_id=submission.id) }}" id="approvePointsForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <input type="hidden" name="action" value="approve_points"/>
+
+          <div style="background: #fafafa; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem;">
+            <h4 style="font-size: 0.95rem; font-weight: 700; color: #374151; margin-bottom: 0.5rem;">
+              Manual Points Override <span style="font-weight: 400; color: #9ca3af; font-size: 0.82rem;">(Optional)</span>
+            </h4>
+            <div style="display: grid; grid-template-columns: 160px 1fr; gap: 1rem; align-items: center;">
+              <div>
+                <label style="display: block; font-size: 0.82rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">Points to Award</label>
+                <input type="number" name="manual_points" id="manual_points" class="form-control" value="{{ preview_points }}" style="font-weight: 700; font-size: 1rem;">
+              </div>
+              <div>
+                <label style="display: block; font-size: 0.82rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">
+                  Override Reason <span style="color: #ef4444;" id="reasonAsterisk">*</span> <small style="color: #6b7280; font-weight: 400;">(Mandatory only if points differ from {{ preview_points }})</small>
+                </label>
+                <input type="text" name="manual_reason" id="manual_reason" class="form-control" placeholder="e.g. Additional bonus for bulk battery weight">
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn btn-primary" style="background: #10b981; border-color: #10b981; font-weight: 700; padding: 0.65rem 1.75rem;">
+              ✓ Approve &amp; Credit Points to User Wallet
+            </button>
+          </div>
+        </form>
+      {% else %}
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1rem; font-size: 0.9rem; color: #065f46;">
+          <strong>Points Locked:</strong> {{ submission.points_awarded }} points were credited to the submitter's wallet on {{ submission.points_approved_at.strftime('%d %b %Y, %I:%M %p') if submission.points_approved_at else '' }} by administrator {{ submission.approved_by_admin or 'System' }}.
+          {% if submission.manual_adjustment_reason %}
+            <div style="margin-top: 0.35rem; font-size: 0.85rem; color: #047857;">
+              <strong>Note:</strong> {{ submission.manual_adjustment_reason }}
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- 3. RECYCLER ASSIGNMENT & PICKUP LOGISTICS -->
+    <div class="card" style="padding: 1.75rem; border-radius: 10px; margin-bottom: 2rem;">
+      <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin-bottom: 0.5rem;">
+        3. Recycler Logistics &amp; Pickup
+      </h3>
+      <p style="font-size: 0.88rem; color: #6b7280; margin-bottom: 1.25rem;">
+        Assign a verified collection partner or log pickup coordination.
+      </p>
+
+      <form method="POST" action="{{ url_for('admin_submission_detail', submission_id=submission.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="action" value="assign_recycler"/>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+          <div>
+            <label style="display: block; font-size: 0.82rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">Recycler Partner</label>
+            <select name="recycler_id" class="form-control" style="font-size: 0.88rem;">
+              <option value="">-- Select Recycler --</option>
+              {% for rec in recyclers %}
+                <option value="{{ rec.id }}" {% if submission.recycler_id == rec.id %}selected{% endif %}>
+                  {{ rec.name }} ({{ rec.contact_phone }}) [{{ rec.status }}]
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label style="display: block; font-size: 0.82rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">Scheduled Pickup Date</label>
+            <input type="date" name="scheduled_pickup_date" class="form-control" value="{{ submission.scheduled_pickup_date or '' }}" style="font-size: 0.88rem;">
+          </div>
+
+          <div>
+            <label style="display: block; font-size: 0.82rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">Collection Status</label>
+            <select name="status" class="form-control" style="font-size: 0.88rem;">
+              <option value="pending" {% if submission.status == 'pending' %}selected{% endif %}>Pending</option>
+              <option value="verified" {% if submission.status == 'verified' %}selected{% endif %}>Verified</option>
+              <option value="scheduled" {% if submission.status == 'scheduled' %}selected{% endif %}>Scheduled for Pickup</option>
+              <option value="collected" {% if submission.status == 'collected' %}selected{% endif %}>Collected</option>
+              <option value="rejected" {% if submission.status == 'rejected' %}selected{% endif %}>Rejected</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="display: block; font-size: 0.82rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">Verified Weight (kg)</label>
+            <input type="number" step="0.1" name="verified_weight_kg" class="form-control" value="{{ submission.verified_weight_kg or '' }}" placeholder="e.g. 5.2" style="font-size: 0.88rem;">
+          </div>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; font-size: 0.82rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">Internal Admin Notes</label>
+          <textarea name="admin_notes" class="form-control" rows="2" placeholder="Internal coordination remarks...">{{ submission.admin_notes or '' }}</textarea>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end;">
+          <button type="submit" class="btn btn-outline btn-sm">Update Logistics &amp; Status</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Images Gallery -->
+    {% if images %}
+      <div class="card" style="padding: 1.75rem; border-radius: 10px;">
+        <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin-bottom: 1rem;">
+          Submitted Photos ({{ images|length }})
+        </h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 1rem;">
+          {% for img in images %}
+            <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; background: #fafafa;">
+              <a href="{{ url_for('static', filename=img.file_path) }}" target="_blank">
+                <img src="{{ url_for('static', filename=img.file_path) }}" alt="{{ img.original_filename }}" style="width: 100%; height: 110px; object-fit: cover;" onerror="this.onerror=null; this.src='{{ url_for('static', filename='images/circuit-pattern.svg') }}';">
+              </a>
+              <div style="padding: 0.35rem; font-size: 0.72rem; color: #6b7280; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
+                {{ img.original_filename }}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Sidebar: Submitter Information & Address -->
+  <div>
+    <div class="card" style="padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem;">
+      <h4 style="font-size: 1rem; font-weight: 700; color: #111827; margin-bottom: 0.75rem;">
+        Submitter Profile
+      </h4>
+      <div style="font-size: 0.88rem; line-height: 1.8; color: #374151;">
+        <div><strong>Name:</strong> {{ submission.full_name }}</div>
+        <div>
+          <strong>Role:</strong>
+          {% if submission.is_student %}
+            <span class="badge" style="background:#dbeafe; color:#1e40af; font-size: 0.75rem;">University Student</span>
+          {% else %}
+            <span class="badge" style="background:#f3f4f6; color:#4b5563; font-size: 0.75rem;">General Citizen</span>
+          {% endif %}
+        </div>
+        {% if submission.is_student %}
+          <div><strong>University:</strong> {{ submission.university_name or submission.university_type }}</div>
+          {% if submission.roll_number %}<div><strong>Roll No:</strong> {{ submission.roll_number }}</div>{% endif %}
+          {% if submission.course_dept %}<div><strong>Course:</strong> {{ submission.course_dept }}</div>{% endif %}
+        {% endif %}
+        <div><strong>Phone:</strong> {{ submission.phone_number }}</div>
+        {% if submission.email %}<div><strong>Email:</strong> {{ submission.email }}</div>{% endif %}
+        {% if submission.user_id %}
+          <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #f3f4f6;">
+            <a href="{{ url_for('admin_user_wallet', user_id=submission.user_id) }}" class="btn btn-outline btn-sm" style="width: 100%; text-align: center; font-size: 0.82rem;">
+              View User Points Wallet &rarr;
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card" style="padding: 1.5rem; border-radius: 10px;">
+      <h4 style="font-size: 1rem; font-weight: 700; color: #111827; margin-bottom: 0.75rem;">
+        Collection Address
+      </h4>
+      <div style="font-size: 0.88rem; line-height: 1.6; color: #374151;">
+        <p style="margin-bottom: 0.35rem;">{{ submission.address }}</p>
+        <p style="margin-bottom: 0.35rem;"><strong>City:</strong> {{ submission.city }}</p>
+        <p style="margin-bottom: 0.35rem;"><strong>State:</strong> {{ submission.state }}</p>
+        <p style="margin-bottom: 0.35rem;"><strong>PIN Code:</strong> {{ submission.pincode }}</p>
+        {% if submission.additional_message %}
+          <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #f3f4f6; font-size: 0.82rem; color: #6b7280;">
+            <strong>Submitter Note:</strong> {{ submission.additional_message }}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

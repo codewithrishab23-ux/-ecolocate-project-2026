@@ -16,6 +16,7 @@ class EcoLocateComprehensiveTestSuite(unittest.TestCase):
         execute_query("DELETE FROM users WHERE email LIKE '%@testdomain.demo'", commit=True)
         execute_query("DELETE FROM centres WHERE id > 87", commit=True)
         execute_query("DELETE FROM devices WHERE device_name LIKE 'Test %'", commit=True)
+        execute_query("DELETE FROM ewaste_submissions WHERE phone_number LIKE '99999%' OR email LIKE '%@testdomain.demo'", commit=True)
 
     @classmethod
     def tearDownClass(cls):
@@ -23,6 +24,7 @@ class EcoLocateComprehensiveTestSuite(unittest.TestCase):
         execute_query("DELETE FROM users WHERE email LIKE '%@testdomain.demo'", commit=True)
         execute_query("DELETE FROM centres WHERE id > 87", commit=True)
         execute_query("DELETE FROM devices WHERE device_name LIKE 'Test %'", commit=True)
+        execute_query("DELETE FROM ewaste_submissions WHERE phone_number LIKE '99999%' OR email LIKE '%@testdomain.demo'", commit=True)
 
     def setUp(self):
         self.app = app
@@ -1306,6 +1308,546 @@ class EcoLocateComprehensiveTestSuite(unittest.TestCase):
         self.assertNotEqual(act_pune['activity_id'], act_blr['activity_id'])
 
         print("[PASS] Test 59: Concurrent Multi-User Independent City Searches Verified.")
+
+    # ==========================================================================
+    # Phase 9 Tests: E-Waste Submissions & Repeat Submission Points System
+    # ==========================================================================
+
+    def _create_test_user_helper(self, email, name="Test Submitter"):
+        """Helper to create or get test user for submissions testing."""
+        from werkzeug.security import generate_password_hash
+        user = execute_query("SELECT id, full_name, email FROM users WHERE email = %s", (email,), fetchone=True)
+        if not user:
+            u_id = execute_query(
+                "INSERT INTO users (full_name, email, password_hash) VALUES (%s, %s, %s)",
+                (name, email, generate_password_hash("TestPassword123!")),
+                commit=True
+            )
+            user = {'id': u_id, 'full_name': name, 'email': email}
+        return user
+
+    def test_60_scenario_1_user_submits_1_item_earns_5_points(self):
+        """Test 60 (Scenario 1): New user submits 1 item -> verified -> 5 points credited."""
+        user = self._create_test_user_helper("scenario1_user@testdomain.demo", "Scenario 1 User")
+        
+        # 1. User submits 1 item
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = user['id']
+            sess['user_name'] = user['full_name']
+
+        resp = self.client.post('/submit-ewaste', data={
+            'is_student': 'yes',
+            'student_name': 'Scenario 1 User',
+            'university_type': 'SGT University',
+            'roll_number': '241306039',
+            'course_dept': 'BCA AIML',
+            'phone_number': '9999900001',
+            'email': user['email'],
+            'address': 'SGT University Hostel Block B',
+            'city': 'Gurugram',
+            'state': 'Haryana',
+            'pincode': '122505',
+            'item_category[]': ['Mobile phones'],
+            'item_name[]': ['Old Nokia Phone'],
+            'item_quantity[]': ['1'],
+            'item_condition[]': ['Working']
+        }, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+
+        # Retrieve created submission
+        sub = execute_query(
+            "SELECT * FROM ewaste_submissions WHERE user_id = %s ORDER BY id DESC LIMIT 1",
+            (user['id'],),
+            fetchone=True
+        )
+        self.assertIsNotNone(sub)
+        self.assertEqual(sub['total_submitted_items'], 1)
+        self.assertEqual(sub['points_approved'], 0)
+
+        # 2. Admin verifies item & approves points
+        from points_service import award_submission_points
+        # Verify item quantity
+        execute_query(
+            "UPDATE ewaste_submission_items SET accepted_quantity = 1, status = 'verified' WHERE submission_id = %s",
+            (sub['id'],),
+            commit=True
+        )
+        success, msg, pts = award_submission_points(sub['id'], admin_id=1)
+        self.assertTrue(success)
+        self.assertEqual(pts, 5)
+
+        # 3. Check wallet balance
+        from points_service import get_or_create_wallet
+        wallet = get_or_create_wallet(user['id'])
+        self.assertEqual(wallet['current_balance'], 5)
+        self.assertEqual(wallet['total_earned'], 5)
+        print("[PASS] Test 60: Scenario 1 - 1 Item Submitted -> Verified -> 5 Points Credited.")
+
+    def test_61_scenario_2_repeat_submission_earns_points_again(self):
+        """Test 61 (Scenario 2): Same user submits another item later -> 5 points again (cumulative wallet balance = 10)."""
+        user = self._create_test_user_helper("scenario1_user@testdomain.demo")
+        
+        # User makes a SECOND independent submission
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = user['id']
+            sess['user_name'] = user['full_name']
+
+        resp = self.client.post('/submit-ewaste', data={
+            'is_student': 'yes',
+            'student_name': 'Scenario 1 User',
+            'university_type': 'SGT University',
+            'phone_number': '9999900001',
+            'email': user['email'],
+            'address': 'SGT University Hostel Block B',
+            'city': 'Gurugram',
+            'state': 'Haryana',
+            'pincode': '122505',
+            'item_category[]': ['Batteries'],
+            'item_name[]': ['Laptop Battery Pack'],
+            'item_quantity[]': ['1'],
+            'item_condition[]': ['Damaged']
+        }, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+
+        sub2 = execute_query(
+            "SELECT * FROM ewaste_submissions WHERE user_id = %s ORDER BY id DESC LIMIT 1",
+            (user['id'],),
+            fetchone=True
+        )
+        self.assertIsNotNone(sub2)
+
+        # Admin verifies & approves points
+        from points_service import award_submission_points, get_or_create_wallet
+        execute_query(
+            "UPDATE ewaste_submission_items SET accepted_quantity = 1, status = 'verified' WHERE submission_id = %s",
+            (sub2['id'],),
+            commit=True
+        )
+        success, msg, pts = award_submission_points(sub2['id'], admin_id=1)
+        self.assertTrue(success)
+        self.assertEqual(pts, 5, "Second 1-item submission must earn 5 points (evaluated per submission!)")
+
+        # Check user wallet balance: 5 from 1st + 5 from 2nd = 10
+        wallet = get_or_create_wallet(user['id'])
+        self.assertEqual(wallet['current_balance'], 10)
+        self.assertEqual(wallet['total_earned'], 10)
+        print("[PASS] Test 61: Scenario 2 - Repeat Submission Evaluated Per Submission -> Cumulative 10 Points Verified.")
+
+    def test_62_scenario_3_two_items_submission_earns_15_points(self):
+        """Test 62 (Scenario 3): Submission with 2 items -> 15 points."""
+        user = self._create_test_user_helper("scenario3_user@testdomain.demo", "Scenario 3 User")
+        from points_service import award_submission_points, get_or_create_wallet
+
+        sub_id = execute_query(
+            """
+            INSERT INTO ewaste_submissions (
+                submission_code, user_id, is_student, full_name, phone_number,
+                address, city, state, pincode, status, total_submitted_items
+            ) VALUES ('SUB-TEST-SCEN3', %s, 0, 'Scenario 3 User', '9999900003', 'Sector 14', 'Gurugram', 'Haryana', '122001', 'pending', 2)
+            """,
+            (user['id'],),
+            commit=True
+        )
+        execute_query(
+            """
+            INSERT INTO ewaste_submission_items (submission_id, category, item_name, submitted_quantity, accepted_quantity, status)
+            VALUES (%s, 'Laptops', 'Old Lenovo ThinkPad', 2, 2, 'verified')
+            """,
+            (sub_id,),
+            commit=True
+        )
+
+        success, msg, pts = award_submission_points(sub_id, admin_id=1)
+        self.assertTrue(success)
+        self.assertEqual(pts, 15)
+
+        wallet = get_or_create_wallet(user['id'])
+        self.assertEqual(wallet['current_balance'], 15)
+        print("[PASS] Test 62: Scenario 3 - 2 Items Submission -> 15 Points Verified.")
+
+    def test_63_scenario_4_five_items_submission_earns_40_points(self):
+        """Test 63 (Scenario 4): Submission with 5 items -> 40 points."""
+        user = self._create_test_user_helper("scenario4_user@testdomain.demo", "Scenario 4 User")
+        from points_service import award_submission_points, get_or_create_wallet
+
+        sub_id = execute_query(
+            """
+            INSERT INTO ewaste_submissions (
+                submission_code, user_id, is_student, full_name, phone_number,
+                address, city, state, pincode, status, total_submitted_items
+            ) VALUES ('SUB-TEST-SCEN4', %s, 0, 'Scenario 4 User', '9999900004', 'Civil Lines', 'Gurugram', 'Haryana', '122001', 'pending', 5)
+            """,
+            (user['id'],),
+            commit=True
+        )
+        execute_query(
+            """
+            INSERT INTO ewaste_submission_items (submission_id, category, item_name, submitted_quantity, accepted_quantity, status)
+            VALUES (%s, 'Chargers and cables', 'Power Adapters', 5, 5, 'verified')
+            """,
+            (sub_id,),
+            commit=True
+        )
+
+        success, msg, pts = award_submission_points(sub_id, admin_id=1)
+        self.assertTrue(success)
+        self.assertEqual(pts, 40)
+
+        wallet = get_or_create_wallet(user['id'])
+        self.assertEqual(wallet['current_balance'], 40)
+        print("[PASS] Test 63: Scenario 4 - 5 Items Submission -> 40 Points Verified.")
+
+    def test_64_scenario_5_multiple_categories_in_one_submission(self):
+        """Test 64 (Scenario 5): Multiple categories in 1 submission (e.g. mobile phone + laptop + cables)."""
+        user = self._create_test_user_helper("scenario5_user@testdomain.demo", "Scenario 5 User")
+        from points_service import award_submission_points, get_or_create_wallet
+
+        sub_id = execute_query(
+            """
+            INSERT INTO ewaste_submissions (
+                submission_code, user_id, is_student, full_name, phone_number,
+                address, city, state, pincode, status, total_submitted_items
+            ) VALUES ('SUB-TEST-SCEN5', %s, 0, 'Scenario 5 User', '9999900005', 'DLF Phase 3', 'Gurugram', 'Haryana', '122002', 'pending', 3)
+            """,
+            (user['id'],),
+            commit=True
+        )
+        # 3 items across 3 distinct categories
+        for cat, name in [('Mobile phones', 'Samsung J7'), ('Laptops', 'HP Pavilion'), ('Chargers and cables', 'HDMI Cable')]:
+            execute_query(
+                """
+                INSERT INTO ewaste_submission_items (submission_id, category, item_name, submitted_quantity, accepted_quantity, status)
+                VALUES (%s, %s, %s, 1, 1, 'verified')
+                """,
+                (sub_id, cat, name),
+                commit=True
+            )
+
+        success, msg, pts = award_submission_points(sub_id, admin_id=1)
+        self.assertTrue(success)
+        # 3 total accepted items -> 25 points tier
+        self.assertEqual(pts, 25)
+
+        wallet = get_or_create_wallet(user['id'])
+        self.assertEqual(wallet['current_balance'], 25)
+        print("[PASS] Test 64: Scenario 5 - Multiple Categories in 1 Submission (3 items -> 25 pts) Verified.")
+
+    def test_65_scenario_6_admin_edits_accepted_quantity_before_approval(self):
+        """Test 65 (Scenario 6): Admin edits accepted quantity before points approval (4 submitted, 2 accepted -> 15 pts)."""
+        user = self._create_test_user_helper("scenario6_user@testdomain.demo", "Scenario 6 User")
+        from points_service import award_submission_points, get_or_create_wallet
+
+        sub_id = execute_query(
+            """
+            INSERT INTO ewaste_submissions (
+                submission_code, user_id, is_student, full_name, phone_number,
+                address, city, state, pincode, status, total_submitted_items
+            ) VALUES ('SUB-TEST-SCEN6', %s, 0, 'Scenario 6 User', '9999900006', 'Sohna Road', 'Gurugram', 'Haryana', '122018', 'pending', 4)
+            """,
+            (user['id'],),
+            commit=True
+        )
+        execute_query(
+            """
+            INSERT INTO ewaste_submission_items (submission_id, category, item_name, submitted_quantity, accepted_quantity, status)
+            VALUES (%s, 'Keyboard and mouse', 'Keyboards', 4, 0, 'pending')
+            """,
+            (sub_id,),
+            commit=True
+        )
+
+        # Admin verifies only 2 of the 4 keyboards are acceptable
+        execute_query(
+            "UPDATE ewaste_submission_items SET accepted_quantity = 2, status = 'verified' WHERE submission_id = %s",
+            (sub_id,),
+            commit=True
+        )
+
+        success, msg, pts = award_submission_points(sub_id, admin_id=1)
+        self.assertTrue(success)
+        # 2 accepted items -> 15 points
+        self.assertEqual(pts, 15)
+
+        wallet = get_or_create_wallet(user['id'])
+        self.assertEqual(wallet['current_balance'], 15)
+        print("[PASS] Test 65: Scenario 6 - Admin Quantity Modification Respected in Points Calculation Verified.")
+
+    def test_66_scenario_7_rejected_items_excluded_from_points(self):
+        """Test 66 (Scenario 7): Rejected items excluded from accepted count and points calculation."""
+        user = self._create_test_user_helper("scenario7_user@testdomain.demo", "Scenario 7 User")
+        from points_service import award_submission_points, get_or_create_wallet
+
+        sub_id = execute_query(
+            """
+            INSERT INTO ewaste_submissions (
+                submission_code, user_id, is_student, full_name, phone_number,
+                address, city, state, pincode, status, total_submitted_items
+            ) VALUES ('SUB-TEST-SCEN7', %s, 0, 'Scenario 7 User', '9999900007', 'Sector 56', 'Gurugram', 'Haryana', '122011', 'pending', 3)
+            """,
+            (user['id'],),
+            commit=True
+        )
+        # Item 1: Accepted (1 item)
+        execute_query(
+            """
+            INSERT INTO ewaste_submission_items (submission_id, category, item_name, submitted_quantity, accepted_quantity, status)
+            VALUES (%s, 'Mobile phones', 'Nokia C2', 1, 1, 'verified')
+            """,
+            (sub_id,),
+            commit=True
+        )
+        # Item 2: Rejected (2 items)
+        execute_query(
+            """
+            INSERT INTO ewaste_submission_items (submission_id, category, item_name, submitted_quantity, accepted_quantity, status, rejection_reason)
+            VALUES (%s, 'Batteries', 'Leaking Acid Batteries', 2, 0, 'rejected', 'Hazardous acid leakage')
+            """,
+            (sub_id,),
+            commit=True
+        )
+
+        success, msg, pts = award_submission_points(sub_id, admin_id=1)
+        self.assertTrue(success)
+        # Only 1 item accepted -> 5 points
+        self.assertEqual(pts, 5)
+
+        wallet = get_or_create_wallet(user['id'])
+        self.assertEqual(wallet['current_balance'], 5)
+        print("[PASS] Test 66: Scenario 7 - Rejected Items Excluded from Points Calculation Verified.")
+
+    def test_67_scenario_8_duplicate_points_claim_prevention(self):
+        """Test 67 (Scenario 8): Duplicate points claim prevention on same submission."""
+        user = self._create_test_user_helper("scenario8_user@testdomain.demo", "Scenario 8 User")
+        from points_service import award_submission_points, get_or_create_wallet
+
+        sub_id = execute_query(
+            """
+            INSERT INTO ewaste_submissions (
+                submission_code, user_id, is_student, full_name, phone_number,
+                address, city, state, pincode, status, total_submitted_items
+            ) VALUES ('SUB-TEST-SCEN8', %s, 0, 'Scenario 8 User', '9999900008', 'Sector 4', 'Gurugram', 'Haryana', '122001', 'pending', 1)
+            """,
+            (user['id'],),
+            commit=True
+        )
+        execute_query(
+            """
+            INSERT INTO ewaste_submission_items (submission_id, category, item_name, submitted_quantity, accepted_quantity, status)
+            VALUES (%s, 'Laptops', 'Acer Aspire', 1, 1, 'verified')
+            """,
+            (sub_id,),
+            commit=True
+        )
+
+        # 1st approval -> succeeds
+        success1, msg1, pts1 = award_submission_points(sub_id, admin_id=1)
+        self.assertTrue(success1)
+        self.assertEqual(pts1, 5)
+
+        # 2nd approval attempt on the SAME submission -> must fail!
+        success2, msg2, pts2 = award_submission_points(sub_id, admin_id=1)
+        self.assertFalse(success2)
+        self.assertIn("already", msg2.lower())
+        self.assertEqual(pts2, 0)
+
+        # Wallet balance remains strictly 5
+        wallet = get_or_create_wallet(user['id'])
+        self.assertEqual(wallet['current_balance'], 5)
+        print("[PASS] Test 67: Scenario 8 - Strict Duplicate Points Claim Prevention Verified.")
+
+    def test_68_scenario_9_normal_user_blocked_from_admin_submission_endpoints(self):
+        """Test 68 (Scenario 9): Normal user blocked from admin submissions endpoints."""
+        user = self._create_test_user_helper("scenario9_user@testdomain.demo", "Scenario 9 User")
+
+        # Session as normal user without admin_id
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = user['id']
+            sess['user_name'] = user['full_name']
+            sess.pop('admin_id', None)
+
+        endpoints = [
+            '/admin/submissions',
+            '/admin/submissions/1',
+            '/admin/submissions/export-csv',
+            '/admin/collections/report',
+            '/admin/collections/export-csv',
+            '/admin/points',
+            f'/admin/points/user/{user["id"]}',
+            '/admin/points/tiers',
+            '/admin/recyclers'
+        ]
+
+        for ep in endpoints:
+            res = self.client.get(ep, follow_redirects=False)
+            self.assertEqual(res.status_code, 302, f"Expected 302 redirect for {ep}")
+            self.assertIn('/admin/login', res.headers['Location'])
+
+        print("[PASS] Test 68: Scenario 9 - Non-Admin Blocked from All Submissions & Points Admin Endpoints Verified.")
+
+    def test_69_scenario_10_submission_wise_points_history_displayed_separately(self):
+        """Test 69 (Scenario 10): Submission-wise points history displayed separately in user points ledger and submissions page."""
+        user = self._create_test_user_helper("scenario10_user@testdomain.demo", "Scenario 10 User")
+        from points_service import award_submission_points, get_wallet_ledger
+
+        # Create two distinct submissions for this user
+        sub1_id = execute_query(
+            """
+            INSERT INTO ewaste_submissions (
+                submission_code, user_id, is_student, full_name, phone_number,
+                address, city, state, pincode, status, total_submitted_items
+            ) VALUES ('SUB-TEST-10A', %s, 0, 'Scenario 10 User', '9999900010', 'Address A', 'Gurugram', 'Haryana', '122001', 'pending', 1)
+            """,
+            (user['id'],),
+            commit=True
+        )
+        execute_query("INSERT INTO ewaste_submission_items (submission_id, category, item_name, submitted_quantity, accepted_quantity, status) VALUES (%s, 'TVs', 'Old CRT', 1, 1, 'verified')", (sub1_id,), commit=True)
+        award_submission_points(sub1_id, admin_id=1)
+
+        sub2_id = execute_query(
+            """
+            INSERT INTO ewaste_submissions (
+                submission_code, user_id, is_student, full_name, phone_number,
+                address, city, state, pincode, status, total_submitted_items
+            ) VALUES ('SUB-TEST-10B', %s, 0, 'Scenario 10 User', '9999900010', 'Address B', 'Gurugram', 'Haryana', '122001', 'pending', 2)
+            """,
+            (user['id'],),
+            commit=True
+        )
+        execute_query("INSERT INTO ewaste_submission_items (submission_id, category, item_name, submitted_quantity, accepted_quantity, status) VALUES (%s, 'Laptops', 'Old Dell', 2, 2, 'verified')", (sub2_id,), commit=True)
+        award_submission_points(sub2_id, admin_id=1)
+
+        # Check ledger entries: exactly 2 separate transactions
+        ledger = get_wallet_ledger(user['id'])
+        self.assertGreaterEqual(len(ledger), 2)
+        codes = [tx['submission_code'] for tx in ledger]
+        self.assertIn('SUB-TEST-10A', codes)
+        self.assertIn('SUB-TEST-10B', codes)
+
+        # Verify /my-points template loads with both transactions
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = user['id']
+            sess['user_name'] = user['full_name']
+        res = self.client.get('/my-points')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"SUB-TEST-10A", res.data)
+        self.assertIn(b"SUB-TEST-10B", res.data)
+
+        print("[PASS] Test 69: Scenario 10 - Submission-Wise Points Ledger Entries Separately Displayed Verified.")
+
+    def test_70_scenario_11_wallet_balance_equals_sum_of_transactions_ledger(self):
+        """Test 70 (Scenario 11): Points wallet balance equals exact sum of transactions ledger."""
+        user = self._create_test_user_helper("scenario11_user@testdomain.demo", "Scenario 11 User")
+        from points_service import manual_adjust_points, recalculate_wallet_balance, get_or_create_wallet
+
+        # Add multiple transactions (+20, +15, -10)
+        manual_adjust_points(user['id'], 20, "Bonus credit 1", admin_id=1)
+        manual_adjust_points(user['id'], 15, "Bonus credit 2", admin_id=1)
+        manual_adjust_points(user['id'], -10, "Adjustment debit", admin_id=1)
+
+        # Calculate sum from ledger
+        totals = execute_query(
+            "SELECT SUM(points_amount) AS calc_total FROM points_transactions WHERE user_id = %s",
+            (user['id'],),
+            fetchone=True
+        )
+        expected_balance = totals['calc_total']
+        self.assertEqual(expected_balance, 25)
+
+        wallet = get_or_create_wallet(user['id'])
+        self.assertEqual(wallet['current_balance'], expected_balance)
+
+        # Recalculate to verify idempotent consistency
+        recalculated = recalculate_wallet_balance(user['id'])
+        self.assertEqual(recalculated, expected_balance)
+        print("[PASS] Test 70: Scenario 11 - 100% Wallet Balance to Ledger Consistency Verified.")
+
+    def test_71_scenario_12_separate_points_balances_across_multiple_users(self):
+        """Test 71 (Scenario 12): Separate points balances across multiple users."""
+        user_a = self._create_test_user_helper("scenario12_user_a@testdomain.demo", "User A")
+        user_b = self._create_test_user_helper("scenario12_user_b@testdomain.demo", "User B")
+        from points_service import manual_adjust_points, get_or_create_wallet
+
+        manual_adjust_points(user_a['id'], 35, "Points for User A", admin_id=1)
+        manual_adjust_points(user_b['id'], 60, "Points for User B", admin_id=1)
+
+        wallet_a = get_or_create_wallet(user_a['id'])
+        wallet_b = get_or_create_wallet(user_b['id'])
+
+        self.assertEqual(wallet_a['current_balance'], 35)
+        self.assertEqual(wallet_b['current_balance'], 60)
+        self.assertNotEqual(wallet_a['current_balance'], wallet_b['current_balance'])
+        print("[PASS] Test 71: Scenario 12 - Independent Wallet Isolation Across Multiple Users Verified.")
+
+    def test_72_scenario_13_dynamic_admin_modification_of_points_tiers(self):
+        """Test 72 (Scenario 13): Dynamic admin modification of points tiers without code edits."""
+        from points_service import save_points_tier, calculate_points_for_quantity
+
+        # Get existing 1-item tier
+        tier1 = execute_query("SELECT id, points_awarded FROM points_tiers WHERE min_quantity = 1 AND max_quantity = 1", fetchone=True)
+        self.assertIsNotNone(tier1)
+        original_pts = tier1['points_awarded']
+
+        try:
+            # Dynamically update 1-item tier to 8 points
+            save_points_tier(
+                tier_name="1 Item Tier (Updated)",
+                min_quantity=1,
+                max_quantity=1,
+                points_awarded=8,
+                is_active=1,
+                tier_id=tier1['id']
+            )
+
+            # Calculation for 1 item should now immediately return 8
+            new_calculated = calculate_points_for_quantity(1)
+            self.assertEqual(new_calculated, 8)
+
+        finally:
+            # Restore to original value (5 points)
+            save_points_tier(
+                tier_name="1 Item Tier",
+                min_quantity=1,
+                max_quantity=1,
+                points_awarded=original_pts,
+                is_active=1,
+                tier_id=tier1['id']
+            )
+            restored = calculate_points_for_quantity(1)
+            self.assertEqual(restored, original_pts)
+
+        print("[PASS] Test 72: Scenario 13 - Dynamic Points Tiers Admin Modification Verified.")
+
+    def test_73_scenario_14_manual_adjustment_requires_reason_and_records_in_ledger(self):
+        """Test 73 (Scenario 14): Manual points adjustment requires non-empty reason and records in ledger."""
+        user = self._create_test_user_helper("scenario14_user@testdomain.demo", "Scenario 14 User")
+        from points_service import manual_adjust_points, get_or_create_wallet, get_wallet_ledger
+
+        # 1. Attempt adjustment without reason -> Must fail
+        success_empty, msg_empty = manual_adjust_points(user['id'], 10, "", admin_id=1)
+        self.assertFalse(success_empty)
+        self.assertIn("reason is required", msg_empty.lower())
+
+        # 2. Attempt adjustment with whitespace-only reason -> Must fail
+        success_ws, msg_ws = manual_adjust_points(user['id'], 10, "   ", admin_id=1)
+        self.assertFalse(success_ws)
+        self.assertIn("reason is required", msg_ws.lower())
+
+        # 3. Valid adjustment with mandatory explanation reason -> Must succeed
+        success_valid, msg_valid = manual_adjust_points(user['id'], 15, "Compensation for logistics delay", admin_id=1)
+        self.assertTrue(success_valid)
+
+        wallet = get_or_create_wallet(user['id'])
+        self.assertEqual(wallet['current_balance'], 15)
+
+        # 4. Verify transaction recorded in ledger
+        ledger = get_wallet_ledger(user['id'])
+        self.assertGreaterEqual(len(ledger), 1)
+        latest_tx = ledger[0]
+        self.assertEqual(latest_tx['points_amount'], 15)
+        self.assertEqual(latest_tx['reason'], "Compensation for logistics delay")
+        self.assertEqual(latest_tx['created_by_admin_id'], 1)
+        print("[PASS] Test 73: Scenario 14 - Mandatory Adjustment Reason & Ledger Recording Verified.")
+
 
 if __name__ == '__main__':
     unittest.main()

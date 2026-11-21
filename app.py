@@ -898,6 +898,12 @@ from admin import register_admin_routes
 register_admin_routes(app)
 
 # ==============================================================================
+# E-Waste Submission & Points Management Routes (Phase 9)
+# ==============================================================================
+from submissions import register_submission_routes
+register_submission_routes(app)
+
+# ==============================================================================
 # Health Check & Diagnostics
 # ==============================================================================
 

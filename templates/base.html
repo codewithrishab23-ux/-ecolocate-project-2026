@@ -29,6 +29,7 @@
         <nav class="nav-links" aria-label="Main Navigation">
           <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">Home</a>
           <a href="{{ url_for('centres') }}" class="nav-link {% if request.endpoint == 'centres' %}active{% endif %}">Find Centres</a>
+          <a href="{{ url_for('submit_ewaste') }}" class="nav-link {% if request.endpoint == 'submit_ewaste' %}active{% endif %}">Submit E-Waste</a>
           <a href="{{ url_for('awareness') }}" class="nav-link {% if request.endpoint == 'awareness' %}active{% endif %}">Why E-Waste Matters</a>
           <a href="{{ url_for('rewards') }}" class="nav-link {% if request.endpoint == 'rewards' %}active{% endif %}">Rewards</a>
           <a href="{{ url_for('about') }}" class="nav-link {% if request.endpoint == 'about' %}active{% endif %}">About</a>
@@ -42,7 +43,9 @@
               </svg>
               <span>{{ session.get('user_name') }}</span>
             </span>
-            <a href="{{ url_for('profile') }}" class="btn btn-outline btn-sm">My Profile</a>
+            <a href="{{ url_for('my_points') }}" class="btn btn-outline btn-sm">My Points</a>
+            <a href="{{ url_for('my_submissions') }}" class="btn btn-outline btn-sm">My Submissions</a>
+            <a href="{{ url_for('profile') }}" class="btn btn-outline btn-sm">Profile</a>
             <a href="{{ url_for('logout') }}" class="btn btn-ghost btn-sm">Log Out</a>
           {% elif session.get('admin_id') %}
             <span class="user-greeting admin-badge">
@@ -116,6 +119,7 @@
           <h4 class="footer-heading">Platform</h4>
           <ul class="footer-links">
             <li><a href="{{ url_for('centres') }}" class="footer-link">Find Centres</a></li>
+            <li><a href="{{ url_for('submit_ewaste') }}" class="footer-link">Submit E-Waste</a></li>
             <li><a href="{{ url_for('awareness') }}" class="footer-link">Why E-Waste Matters</a></li>
             <li><a href="{{ url_for('rewards') }}" class="footer-link">Rewards Calculator</a></li>
             <li><a href="{{ url_for('about') }}" class="footer-link">About EcoLocate</a></li>

@@ -1,0 +1,200 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}E-Waste Submissions Management | EcoLocate Admin{% endblock %}
+
+{% block content %}
+<div class="admin-content-header" style="margin-bottom: 2rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1 style="font-size: 1.75rem; font-weight: 800; color: #111827; margin-bottom: 0.25rem;">
+        E-Waste Submissions &amp; Verification
+      </h1>
+      <p style="font-size: 0.9rem; color: #6b7280;">
+        Review user e-waste submissions, verify accepted quantities, award repeat points, and schedule recycler collection.
+      </p>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem;">
+      <a href="{{ url_for('admin_submissions_export_csv') }}" class="btn btn-outline btn-sm">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.25rem;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+        </svg>
+        Export Submissions (CSV)
+      </a>
+      <a href="{{ url_for('admin_points_tiers') }}" class="btn btn-outline btn-sm">
+        Configure Points Tiers
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- KPI Summary Cards -->
+<div class="admin-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Total Submissions</div>
+    <div style="font-size: 1.75rem; font-weight: 800; color: #111827; margin-top: 0.25rem;">{{ kpi_total }}</div>
+  </div>
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #f59e0b;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Pending Review</div>
+    <div style="font-size: 1.75rem; font-weight: 800; color: #d97706; margin-top: 0.25rem;">{{ kpi_pending }}</div>
+  </div>
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #10b981;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Verified / Approved</div>
+    <div style="font-size: 1.75rem; font-weight: 800; color: #059669; margin-top: 0.25rem;">{{ kpi_verified }}</div>
+  </div>
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #065f46;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Items Accepted</div>
+    <div style="font-size: 1.75rem; font-weight: 800; color: #065f46; margin-top: 0.25rem;">{{ kpi_accepted_items }}</div>
+  </div>
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #8b5cf6;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Points Distributed</div>
+    <div style="font-size: 1.75rem; font-weight: 800; color: #7c3aed; margin-top: 0.25rem;">{{ kpi_points }}</div>
+  </div>
+</div>
+
+<!-- Filters Bar -->
+<div class="card" style="padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
+  <form method="GET" action="{{ url_for('admin_submissions') }}" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) 100px; gap: 0.75rem; align-items: flex-end;">
+    <div>
+      <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">Status</label>
+      <select name="status" class="form-control" style="font-size: 0.88rem;">
+        <option value="all" {% if status == 'all' %}selected{% endif %}>All Statuses</option>
+        <option value="pending" {% if status == 'pending' %}selected{% endif %}>Pending</option>
+        <option value="verified" {% if status == 'verified' %}selected{% endif %}>Verified</option>
+        <option value="collected" {% if status == 'collected' %}selected{% endif %}>Collected</option>
+        <option value="rejected" {% if status == 'rejected' %}selected{% endif %}>Rejected</option>
+      </select>
+    </div>
+
+    <div>
+      <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">Submitter Type</label>
+      <select name="student" class="form-control" style="font-size: 0.88rem;">
+        <option value="all" {% if student_filter == 'all' %}selected{% endif %}>All Submitters</option>
+        <option value="sgt" {% if student_filter == 'sgt' %}selected{% endif %}>SGT University Students</option>
+        <option value="other_uni" {% if student_filter == 'other_uni' %}selected{% endif %}>Other University Students</option>
+        <option value="non_student" {% if student_filter == 'non_student' %}selected{% endif %}>General Citizens</option>
+      </select>
+    </div>
+
+    <div>
+      <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">State</label>
+      <select name="state" class="form-control" style="font-size: 0.88rem;">
+        <option value="">All States</option>
+        {% for st in states %}
+          <option value="{{ st.state }}" {% if state == st.state %}selected{% endif %}>{{ st.state }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">Search</label>
+      <input type="text" name="q" class="form-control" placeholder="Code, Name, Phone..." value="{{ q }}" style="font-size: 0.88rem;">
+    </div>
+
+    <div>
+      <button type="submit" class="btn btn-primary" style="width: 100%; font-size: 0.88rem; padding: 0.5rem 0;">Filter</button>
+    </div>
+  </form>
+</div>
+
+<!-- Submissions Table -->
+<div class="card" style="padding: 1.5rem; border-radius: 8px;">
+  {% if submissions %}
+    <div class="table-responsive">
+      <table class="table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 2px solid #e5e7eb; text-align: left; font-size: 0.82rem; color: #6b7280;">
+            <th style="padding: 0.75rem;">Code &amp; Date</th>
+            <th style="padding: 0.75rem;">Submitter</th>
+            <th style="padding: 0.75rem;">Classification</th>
+            <th style="padding: 0.75rem;">Location</th>
+            <th style="padding: 0.75rem;">Items</th>
+            <th style="padding: 0.75rem;">Points</th>
+            <th style="padding: 0.75rem;">Status</th>
+            <th style="padding: 0.75rem; text-align: right;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sub in submissions %}
+            <tr style="border-bottom: 1px solid #f3f4f6; font-size: 0.88rem;">
+              <td style="padding: 0.75rem;">
+                <a href="{{ url_for('admin_submission_detail', submission_id=sub.id) }}" style="font-weight: 700; color: #047857; text-decoration: none;">
+                  {{ sub.submission_code }}
+                </a>
+                <div style="font-size: 0.75rem; color: #6b7280;">
+                  {{ sub.created_at.strftime('%d %b %Y, %I:%M %p') if sub.created_at else '' }}
+                </div>
+              </td>
+              <td style="padding: 0.75rem;">
+                <div style="font-weight: 600; color: #111827;">{{ sub.full_name }}</div>
+                <div style="font-size: 0.78rem; color: #6b7280;">{{ sub.phone_number }}</div>
+              </td>
+              <td style="padding: 0.75rem;">
+                {% if sub.is_student %}
+                  <span class="badge" style="background: #dbeafe; color: #1e40af; font-size: 0.75rem; padding: 0.15rem 0.45rem; border-radius: 4px;">
+                    {{ sub.university_type or 'Student' }}
+                  </span>
+                  {% if sub.roll_number %}<div style="font-size: 0.75rem; color: #6b7280;">Roll: {{ sub.roll_number }}</div>{% endif %}
+                {% else %}
+                  <span class="badge" style="background: #f3f4f6; color: #4b5563; font-size: 0.75rem; padding: 0.15rem 0.45rem; border-radius: 4px;">
+                    Citizen
+                  </span>
+                {% endif %}
+              </td>
+              <td style="padding: 0.75rem; color: #374151;">
+                {{ sub.city }}, {{ sub.state }}
+              </td>
+              <td style="padding: 0.75rem;">
+                <span style="font-weight: 700; color: #059669;">{{ sub.total_accepted_items }} acc.</span> / {{ sub.total_submitted_items }} sub.
+              </td>
+              <td style="padding: 0.75rem;">
+                {% if sub.points_approved %}
+                  <span style="font-weight: 700; color: #10b981;">{{ sub.points_awarded }} pts</span>
+                {% else %}
+                  <span style="color: #9ca3af; font-size: 0.8rem;">Pending (est. {{ sub.points_calculated }})</span>
+                {% endif %}
+              </td>
+              <td style="padding: 0.75rem;">
+                {% if sub.status == 'verified' or sub.points_approved == 1 %}
+                  <span class="badge" style="background: #10b981; color: white; padding: 0.2rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Verified</span>
+                {% elif sub.status == 'collected' %}
+                  <span class="badge" style="background: #059669; color: white; padding: 0.2rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Collected</span>
+                {% elif sub.status == 'rejected' %}
+                  <span class="badge" style="background: #ef4444; color: white; padding: 0.2rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Rejected</span>
+                {% else %}
+                  <span class="badge" style="background: #f59e0b; color: white; padding: 0.2rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Pending</span>
+                {% endif %}
+              </td>
+              <td style="padding: 0.75rem; text-align: right;">
+                <a href="{{ url_for('admin_submission_detail', submission_id=sub.id) }}" class="btn btn-outline btn-sm" style="font-size: 0.8rem; padding: 0.25rem 0.5rem;">
+                  Review &amp; Verify &rarr;
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; font-size: 0.88rem;">
+        <span style="color: #6b7280;">Showing page {{ page }} of {{ total_pages }} ({{ total_count }} submissions)</span>
+        <div style="display: flex; gap: 0.5rem;">
+          {% if page > 1 %}
+            <a href="{{ url_for('admin_submissions', page=page-1, status=status, student=student_filter, state=state, q=q) }}" class="btn btn-outline btn-sm">&larr; Prev</a>
+          {% endif %}
+          {% if page < total_pages %}
+            <a href="{{ url_for('admin_submissions', page=page+1, status=status, student=student_filter, state=state, q=q) }}" class="btn btn-outline btn-sm">Next &rarr;</a>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+  {% else %}
+    <div style="padding: 2.5rem; text-align: center; color: #9ca3af;">
+      No e-waste submissions found matching the criteria.
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

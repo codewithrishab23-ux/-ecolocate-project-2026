@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block title %}My E-Waste Submissions | EcoLocate{% endblock %}
+
+{% block content %}
+<div class="page-header" style="background: linear-gradient(135deg, #0e3b2e 0%, #155e46 100%); color: #fff; padding: 2.25rem 0;">
+  <div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <div>
+        <h1 style="font-size: 2rem; font-weight: 800; margin-bottom: 0.35rem;">
+          My E-Waste Submissions
+        </h1>
+        <p style="font-size: 0.95rem; color: #d1fae5;">
+          Track your e-waste requests, verification status, and points earned per submission.
+        </p>
+      </div>
+
+      <div style="display: flex; gap: 0.75rem;">
+        <a href="{{ url_for('my_points') }}" class="btn btn-outline" style="background: rgba(255,255,255,0.1); border-color: #6ee7b7; color: white;">
+          View Points Wallet ({{ wallet.current_balance if wallet else 0 }} pts)
+        </a>
+        <a href="{{ url_for('submit_ewaste') }}" class="btn btn-primary" style="background: #10b981; border-color: #10b981;">
+          + Submit New E-Waste
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container" style="padding: 2.5rem 1rem;">
+  {% if submissions %}
+    <div class="card" style="padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.06);">
+      <div class="table-responsive">
+        <table class="table" style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="border-bottom: 2px solid #e5e7eb; text-align: left; font-size: 0.85rem; color: #6b7280;">
+              <th style="padding: 0.75rem;">Tracking Code</th>
+              <th style="padding: 0.75rem;">Date</th>
+              <th style="padding: 0.75rem;">Submitted Items</th>
+              <th style="padding: 0.75rem;">Accepted Items</th>
+              <th style="padding: 0.75rem;">Status</th>
+              <th style="padding: 0.75rem;">Points Earned</th>
+              <th style="padding: 0.75rem; text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sub in submissions %}
+              <tr style="border-bottom: 1px solid #f3f4f6; font-size: 0.92rem;">
+                <td style="padding: 0.75rem; font-weight: 700;">
+                  <a href="{{ url_for('submission_detail', submission_code=sub.submission_code) }}" style="color: #047857; text-decoration: none;">
+                    {{ sub.submission_code }}
+                  </a>
+                </td>
+                <td style="padding: 0.75rem; color: #4b5563;">
+                  {{ sub.created_at.strftime('%d %b %Y') if sub.created_at else '' }}
+                </td>
+                <td style="padding: 0.75rem; font-weight: 600;">
+                  {{ sub.total_submitted_items }}
+                </td>
+                <td style="padding: 0.75rem; font-weight: 700; color: #047857;">
+                  {{ sub.total_accepted_items }}
+                </td>
+                <td style="padding: 0.75rem;">
+                  {% if sub.status == 'verified' or sub.points_approved == 1 %}
+                    <span class="badge" style="background: #10b981; color: white; padding: 0.25rem 0.6rem; border-radius: 9999px; font-size: 0.78rem;">Verified</span>
+                  {% elif sub.status == 'collected' %}
+                    <span class="badge" style="background: #059669; color: white; padding: 0.25rem 0.6rem; border-radius: 9999px; font-size: 0.78rem;">Collected</span>
+                  {% elif sub.status == 'rejected' %}
+                    <span class="badge" style="background: #ef4444; color: white; padding: 0.25rem 0.6rem; border-radius: 9999px; font-size: 0.78rem;">Rejected</span>
+                  {% else %}
+                    <span class="badge" style="background: #f59e0b; color: white; padding: 0.25rem 0.6rem; border-radius: 9999px; font-size: 0.78rem;">Pending</span>
+                  {% endif %}
+                </td>
+                <td style="padding: 0.75rem; font-weight: 700; color: #0e3b2e;">
+                  {% if sub.points_approved %}
+                    <span style="color: #10b981;">+{{ sub.points_awarded }} pts</span>
+                  {% else %}
+                    <span style="color: #9ca3af; font-size: 0.85rem;">Pending (est. {{ sub.points_calculated }} pts)</span>
+                  {% endif %}
+                </td>
+                <td style="padding: 0.75rem; text-align: right;">
+                  <a href="{{ url_for('submission_detail', submission_code=sub.submission_code) }}" class="btn btn-outline btn-sm" style="font-size: 0.82rem; padding: 0.25rem 0.6rem;">
+                    View Details &rarr;
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <div class="card" style="padding: 3rem 1.5rem; text-align: center; border-radius: 12px; max-width: 600px; margin: 0 auto;">
+      <svg width="48" height="48" fill="none" stroke="#9ca3af" viewBox="0 0 24 24" style="margin: 0 auto 1rem auto;">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+      </svg>
+      <h3 style="font-size: 1.25rem; font-weight: 700; color: #111827; margin-bottom: 0.5rem;">
+        No E-Waste Submissions Yet
+      </h3>
+      <p style="font-size: 0.95rem; color: #6b7280; margin-bottom: 1.5rem; max-width: 440px; margin-left: auto; margin-right: auto;">
+        Give your old smartphones, laptops, cables, and batteries a sustainable destination and earn reward points on every single submission.
+      </p>
+      <a href="{{ url_for('submit_ewaste') }}" class="btn btn-primary" style="padding: 0.75rem 1.75rem;">
+        Submit Your First E-Waste
+      </a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

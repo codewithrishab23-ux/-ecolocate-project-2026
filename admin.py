@@ -12,10 +12,15 @@ import uuid
 from functools import wraps
 from flask import (
     request, render_template, redirect, url_for,
-    flash, session, jsonify, current_app
+    flash, session, jsonify, current_app, Response
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from db import execute_query, check_db_health
+from points_service import (
+    calculate_points_for_quantity, get_active_points_tiers,
+    save_points_tier, get_or_create_wallet, get_wallet_ledger,
+    award_submission_points, manual_adjust_points, recalculate_wallet_balance
+)
 
 # Temporary memory cache for staged CSV previews (token -> list of row dicts)
 _CSV_STAGING_CACHE = {}
@@ -1004,3 +1009,668 @@ def register_admin_routes(app):
             total_rewards=rewards_count_row['total'] if rewards_count_row else 0,
             recently_active_users=recently_active_users
         )
+
+    # ==========================================================================
+    # 7. E-Waste Submissions & Points Verification (Phase 9)
+    # ==========================================================================
+
+    @app.route('/admin/submissions')
+    @admin_required
+    def admin_submissions():
+        """List and filter e-waste submissions from users and students."""
+        status = request.args.get('status', 'all').strip()
+        student_filter = request.args.get('student', 'all').strip()
+        q = request.args.get('q', '').strip()
+        state = request.args.get('state', '').strip()
+
+        try:
+            page = max(1, int(request.args.get('page', 1)))
+        except (ValueError, TypeError):
+            page = 1
+        limit = 20
+        offset = (page - 1) * limit
+
+        where_clauses = ["1=1"]
+        params = []
+
+        if status and status != 'all':
+            where_clauses.append("s.status = %s")
+            params.append(status)
+
+        if student_filter == 'sgt':
+            where_clauses.append("s.is_student = 1 AND s.university_type = 'SGT University'")
+        elif student_filter == 'other_uni':
+            where_clauses.append("s.is_student = 1 AND s.university_type != 'SGT University'")
+        elif student_filter == 'non_student':
+            where_clauses.append("s.is_student = 0")
+
+        if state:
+            where_clauses.append("s.state = %s")
+            params.append(state)
+
+        if q:
+            like_term = f"%{q}%"
+            where_clauses.append(
+                "(s.submission_code LIKE %s OR s.full_name LIKE %s OR s.student_name LIKE %s "
+                "OR s.phone_number LIKE %s OR s.email LIKE %s OR s.city LIKE %s)"
+            )
+            params.extend([like_term, like_term, like_term, like_term, like_term, like_term])
+
+        where_sql = " AND ".join(where_clauses)
+
+        # Count total matching
+        count_sql = f"SELECT COUNT(*) AS total FROM ewaste_submissions s WHERE {where_sql}"
+        count_row = execute_query(count_sql, tuple(params), fetchone=True)
+        total_count = count_row['total'] if count_row else 0
+
+        # Submissions data
+        data_sql = f"""
+        SELECT s.*, 
+               u.email AS account_email,
+               r.name AS recycler_name,
+               COUNT(i.id) AS item_count
+        FROM ewaste_submissions s
+        LEFT JOIN users u ON s.user_id = u.id
+        LEFT JOIN recyclers r ON s.recycler_id = r.id
+        LEFT JOIN ewaste_submission_items i ON s.id = i.submission_id
+        WHERE {where_sql}
+        GROUP BY s.id
+        ORDER BY s.created_at DESC
+        LIMIT %s OFFSET %s
+        """
+        data_params = list(params) + [limit, offset]
+        submissions = execute_query(data_sql, tuple(data_params), fetchall=True) or []
+        total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
+
+        # Summary KPIs
+        total_subs_row = execute_query("SELECT COUNT(*) AS total FROM ewaste_submissions", fetchone=True)
+        pending_subs_row = execute_query("SELECT COUNT(*) AS total FROM ewaste_submissions WHERE status = 'pending'", fetchone=True)
+        verified_subs_row = execute_query("SELECT COUNT(*) AS total FROM ewaste_submissions WHERE status = 'verified' OR points_approved = 1", fetchone=True)
+        collected_subs_row = execute_query("SELECT COUNT(*) AS total FROM ewaste_submissions WHERE status = 'collected'", fetchone=True)
+        points_awarded_row = execute_query("SELECT COALESCE(SUM(points_awarded), 0) AS total FROM ewaste_submissions WHERE points_approved = 1", fetchone=True)
+        items_accepted_row = execute_query("SELECT COALESCE(SUM(total_accepted_items), 0) AS total FROM ewaste_submissions", fetchone=True)
+
+        states = execute_query("SELECT DISTINCT state FROM ewaste_submissions WHERE state IS NOT NULL ORDER BY state ASC", fetchall=True) or []
+
+        return render_template(
+            'admin_submissions.html',
+            submissions=submissions,
+            total_count=total_count,
+            page=page,
+            total_pages=total_pages,
+            status=status,
+            student_filter=student_filter,
+            q=q,
+            state=state,
+            states=states,
+            kpi_total=total_subs_row['total'] if total_subs_row else 0,
+            kpi_pending=pending_subs_row['total'] if pending_subs_row else 0,
+            kpi_verified=verified_subs_row['total'] if verified_subs_row else 0,
+            kpi_collected=collected_subs_row['total'] if collected_subs_row else 0,
+            kpi_points=points_awarded_row['total'] if points_awarded_row else 0,
+            kpi_accepted_items=items_accepted_row['total'] if items_accepted_row else 0
+        )
+
+    @app.route('/admin/submissions/<int:submission_id>', methods=['GET', 'POST'])
+    @admin_required
+    def admin_submission_detail(submission_id):
+        """Review, verify items, approve repeat submission points, and assign recycler."""
+        sub = execute_query(
+            """
+            SELECT s.*, u.email AS account_email, u.full_name AS account_name,
+                   r.name AS recycler_name, r.contact_phone AS recycler_phone,
+                   a.username AS approved_by_admin
+            FROM ewaste_submissions s
+            LEFT JOIN users u ON s.user_id = u.id
+            LEFT JOIN recyclers r ON s.recycler_id = r.id
+            LEFT JOIN admins a ON s.points_approved_by = a.id
+            WHERE s.id = %s
+            """,
+            (submission_id,),
+            fetchone=True
+        )
+        if not sub:
+            flash('Submission not found.', 'error')
+            return redirect(url_for('admin_submissions'))
+
+        if request.method == 'POST':
+            action = request.form.get('action')
+
+            if action == 'verify_items':
+                # Update item statuses and accepted quantities
+                item_ids = request.form.getlist('item_id[]') or request.form.getlist('item_id')
+                total_accepted = 0
+
+                for item_id_raw in item_ids:
+                    try:
+                        i_id = int(item_id_raw)
+                        accepted_qty = int(request.form.get(f'accepted_qty_{i_id}', 0))
+                        if accepted_qty < 0:
+                            accepted_qty = 0
+                        item_status = request.form.get(f'item_status_{i_id}', 'pending')
+                        rejection_reason = request.form.get(f'rejection_reason_{i_id}', '').strip() or None
+
+                        # If status is rejected, accepted_qty is 0
+                        if item_status == 'rejected':
+                            accepted_qty = 0
+
+                        execute_query(
+                            """
+                            UPDATE ewaste_submission_items
+                            SET accepted_quantity = %s, status = %s, rejection_reason = %s
+                            WHERE id = %s AND submission_id = %s
+                            """,
+                            (accepted_qty, item_status, rejection_reason, i_id, submission_id),
+                            commit=True
+                        )
+
+                        if item_status != 'rejected':
+                            total_accepted += accepted_qty
+
+                    except (ValueError, TypeError) as e:
+                        continue
+
+                # Recalculate preview points
+                calc_pts = calculate_points_for_quantity(total_accepted)
+                execute_query(
+                    """
+                    UPDATE ewaste_submissions
+                    SET total_accepted_items = %s, points_calculated = %s
+                    WHERE id = %s
+                    """,
+                    (total_accepted, calc_pts, submission_id),
+                    commit=True
+                )
+                flash(f"Items verification updated. Total accepted: {total_accepted} items. Calculated points: {calc_pts}.", "success")
+                return redirect(url_for('admin_submission_detail', submission_id=submission_id))
+
+            elif action == 'approve_points':
+                # Check duplicate prevention
+                if sub.get('points_approved'):
+                    flash("Points have already been approved for this submission.", "error")
+                    return redirect(url_for('admin_submission_detail', submission_id=submission_id))
+
+                manual_points_raw = request.form.get('manual_points', '').strip()
+                manual_reason = request.form.get('manual_reason', '').strip()
+
+                manual_points = None
+                if manual_points_raw:
+                    try:
+                        manual_points = int(manual_points_raw)
+                    except ValueError:
+                        flash("Manual points must be an integer.", "error")
+                        return redirect(url_for('admin_submission_detail', submission_id=submission_id))
+
+                success, msg, pts = award_submission_points(
+                    submission_id=submission_id,
+                    admin_id=session.get('admin_id'),
+                    manual_points=manual_points,
+                    reason=manual_reason
+                )
+
+                if success:
+                    flash(msg, "success")
+                else:
+                    flash(msg, "error")
+                return redirect(url_for('admin_submission_detail', submission_id=submission_id))
+
+            elif action == 'assign_recycler':
+                recycler_id = request.form.get('recycler_id', '').strip() or None
+                pickup_date = request.form.get('scheduled_pickup_date', '').strip() or None
+                sub_status = request.form.get('status', 'pending').strip()
+                admin_notes = request.form.get('admin_notes', '').strip() or None
+                verified_weight = request.form.get('verified_weight_kg', '').strip() or None
+
+                rec_id = int(recycler_id) if recycler_id and recycler_id.isdigit() else None
+                weight_val = float(verified_weight) if verified_weight else None
+
+                execute_query(
+                    """
+                    UPDATE ewaste_submissions
+                    SET recycler_id = %s,
+                        scheduled_pickup_date = %s,
+                        status = %s,
+                        admin_notes = %s,
+                        verified_weight_kg = %s,
+                        collected_at = CASE WHEN %s = 'collected' AND collected_at IS NULL THEN NOW() ELSE collected_at END
+                    WHERE id = %s
+                    """,
+                    (rec_id, pickup_date, sub_status, admin_notes, weight_val, sub_status, submission_id),
+                    commit=True
+                )
+                flash("Recycler assignment and collection status updated.", "success")
+                return redirect(url_for('admin_submission_detail', submission_id=submission_id))
+
+        items = execute_query(
+            "SELECT * FROM ewaste_submission_items WHERE submission_id = %s ORDER BY id ASC",
+            (submission_id,),
+            fetchall=True
+        ) or []
+
+        images = execute_query(
+            "SELECT * FROM ewaste_submission_images WHERE submission_id = %s ORDER BY id ASC",
+            (submission_id,),
+            fetchall=True
+        ) or []
+
+        recyclers = execute_query(
+            "SELECT id, name, contact_phone, status FROM recyclers ORDER BY name ASC",
+            fetchall=True
+        ) or []
+
+        # Current total accepted items
+        accepted_count = sum(i['accepted_quantity'] for i in items if i['status'] != 'rejected')
+        preview_points = calculate_points_for_quantity(accepted_count)
+
+        return render_template(
+            'admin_submission_detail.html',
+            submission=sub,
+            items=items,
+            images=images,
+            recyclers=recyclers,
+            accepted_count=accepted_count,
+            preview_points=preview_points
+        )
+
+    @app.route('/admin/submissions/export-csv')
+    @admin_required
+    def admin_submissions_export_csv():
+        """Export all submissions to CSV for administrative record-keeping."""
+        submissions = execute_query(
+            """
+            SELECT s.submission_code, s.created_at, s.is_student, s.student_name,
+                   s.university_type, s.university_name, s.roll_number, s.course_dept,
+                   s.full_name, s.phone_number, s.email, s.address, s.city, s.state, s.pincode,
+                   s.total_submitted_items, s.total_accepted_items, s.estimated_weight_kg,
+                   s.verified_weight_kg, s.status, s.points_awarded, s.points_approved,
+                   r.name AS recycler_name
+            FROM ewaste_submissions s
+            LEFT JOIN recyclers r ON s.recycler_id = r.id
+            ORDER BY s.created_at DESC
+            """,
+            fetchall=True
+        ) or []
+
+        si = io.StringIO()
+        cw = csv.writer(si)
+        cw.writerow([
+            'Submission Code', 'Date', 'Is Student', 'Student Name',
+            'University Type', 'University Name', 'Roll Number', 'Course / Dept',
+            'Full Name', 'Phone', 'Email', 'Address', 'City', 'State', 'PIN Code',
+            'Submitted Items', 'Accepted Items', 'Est Weight (kg)', 'Verified Weight (kg)',
+            'Status', 'Points Awarded', 'Points Approved', 'Recycler'
+        ])
+
+        for sub in submissions:
+            cw.writerow([
+                sub['submission_code'],
+                str(sub['created_at']),
+                'Yes' if sub['is_student'] else 'No',
+                sub['student_name'] or '',
+                sub['university_type'] or '',
+                sub['university_name'] or '',
+                sub['roll_number'] or '',
+                sub['course_dept'] or '',
+                sub['full_name'],
+                sub['phone_number'],
+                sub['email'] or '',
+                sub['address'],
+                sub['city'],
+                sub['state'],
+                sub['pincode'],
+                sub['total_submitted_items'],
+                sub['total_accepted_items'],
+                sub['estimated_weight_kg'] or '',
+                sub['verified_weight_kg'] or '',
+                sub['status'],
+                sub['points_awarded'],
+                'Yes' if sub['points_approved'] else 'No',
+                sub['recycler_name'] or 'Unassigned'
+            ])
+
+        output = si.getvalue()
+        return Response(
+            output,
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment;filename=ecolocate_submissions.csv"}
+        )
+
+    # ==========================================================================
+    # 8. E-Waste Collection Management & Weekly Reports (Phase 9)
+    # ==========================================================================
+
+    @app.route('/admin/collections/report')
+    @admin_required
+    def admin_collections_report():
+        """E-Waste Collection management dashboard and weekly collection report."""
+        # Aggregate weekly metrics
+        weekly_rows = execute_query(
+            """
+            SELECT 
+                YEARWEEK(s.created_at, 1) AS yw,
+                MIN(DATE(s.created_at)) AS week_start,
+                MAX(DATE(s.created_at)) AS week_end,
+                COUNT(s.id) AS total_submissions,
+                COALESCE(SUM(s.total_accepted_items), 0) AS total_accepted_items,
+                COALESCE(SUM(s.verified_weight_kg), 0) AS total_verified_weight,
+                COALESCE(SUM(s.points_awarded), 0) AS total_points_awarded,
+                COALESCE(SUM(CASE WHEN s.status = 'collected' THEN 1 ELSE 0 END), 0) AS collections_completed
+            FROM ewaste_submissions s
+            GROUP BY YEARWEEK(s.created_at, 1)
+            ORDER BY yw DESC
+            LIMIT 12
+            """,
+            fetchall=True
+        ) or []
+
+        # Category breakdowns across all submissions
+        category_breakdown = execute_query(
+            """
+            SELECT i.category,
+                   COUNT(i.id) AS total_entries,
+                   COALESCE(SUM(i.submitted_quantity), 0) AS total_submitted_qty,
+                   COALESCE(SUM(i.accepted_quantity), 0) AS total_accepted_qty
+            FROM ewaste_submission_items i
+            GROUP BY i.category
+            ORDER BY total_accepted_qty DESC
+            """,
+            fetchall=True
+        ) or []
+
+        # Totals
+        overall = execute_query(
+            """
+            SELECT 
+                COUNT(*) AS total_submissions,
+                COALESCE(SUM(total_accepted_items), 0) AS total_accepted_items,
+                COALESCE(SUM(verified_weight_kg), 0) AS total_weight_kg,
+                COALESCE(SUM(CASE WHEN status = 'collected' THEN 1 ELSE 0 END), 0) AS total_collected
+            FROM ewaste_submissions
+            """,
+            fetchone=True
+        )
+
+        return render_template(
+            'admin_collections_report.html',
+            weekly_rows=weekly_rows,
+            category_breakdown=category_breakdown,
+            overall=overall or {}
+        )
+
+    @app.route('/admin/collections/export-csv')
+    @admin_required
+    def admin_collections_export_csv():
+        """Export weekly collection summary to CSV."""
+        weekly_rows = execute_query(
+            """
+            SELECT 
+                YEARWEEK(s.created_at, 1) AS yw,
+                MIN(DATE(s.created_at)) AS week_start,
+                MAX(DATE(s.created_at)) AS week_end,
+                COUNT(s.id) AS total_submissions,
+                COALESCE(SUM(s.total_accepted_items), 0) AS total_accepted_items,
+                COALESCE(SUM(s.verified_weight_kg), 0) AS total_verified_weight,
+                COALESCE(SUM(s.points_awarded), 0) AS total_points_awarded,
+                COALESCE(SUM(CASE WHEN s.status = 'collected' THEN 1 ELSE 0 END), 0) AS collections_completed
+            FROM ewaste_submissions s
+            GROUP BY YEARWEEK(s.created_at, 1)
+            ORDER BY yw DESC
+            """,
+            fetchall=True
+        ) or []
+
+        si = io.StringIO()
+        cw = csv.writer(si)
+        cw.writerow([
+            'Year-Week', 'Week Start', 'Week End', 'Total Submissions',
+            'Accepted Items', 'Verified Weight (kg)', 'Points Awarded', 'Collections Completed'
+        ])
+
+        for row in weekly_rows:
+            cw.writerow([
+                row['yw'],
+                str(row['week_start']),
+                str(row['week_end']),
+                row['total_submissions'],
+                row['total_accepted_items'],
+                row['total_verified_weight'],
+                row['total_points_awarded'],
+                row['collections_completed']
+            ])
+
+        output = si.getvalue()
+        return Response(
+            output,
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment;filename=ecolocate_weekly_collections.csv"}
+        )
+
+    # ==========================================================================
+    # 9. Points Management & User Wallets (Phase 9)
+    # ==========================================================================
+
+    @app.route('/admin/points')
+    @admin_required
+    def admin_points():
+        """Admin points management, wallet overview, and transaction ledger."""
+        q = request.args.get('q', '').strip()
+
+        where_clause = "1=1"
+        params = []
+        if q:
+            where_clause = "(u.full_name LIKE %s OR u.email LIKE %s)"
+            params = [f"%{q}%", f"%{q}%"]
+
+        wallets = execute_query(
+            f"""
+            SELECT w.*, u.full_name, u.email,
+                   (SELECT COUNT(*) FROM ewaste_submissions WHERE user_id = u.id) AS total_submissions,
+                   (SELECT COUNT(*) FROM points_transactions WHERE user_id = u.id) AS tx_count
+            FROM user_points_wallets w
+            JOIN users u ON w.user_id = u.id
+            WHERE {where_clause}
+            ORDER BY w.current_balance DESC, w.total_earned DESC
+            """,
+            tuple(params),
+            fetchall=True
+        ) or []
+
+        # Recent transactions across all users
+        recent_txs = execute_query(
+            """
+            SELECT pt.*, u.full_name, u.email, a.username AS admin_username,
+                   s.submission_code
+            FROM points_transactions pt
+            JOIN users u ON pt.user_id = u.id
+            LEFT JOIN admins a ON pt.created_by_admin_id = a.id
+            LEFT JOIN ewaste_submissions s ON pt.submission_id = s.id
+            ORDER BY pt.created_at DESC, pt.id DESC
+            LIMIT 30
+            """,
+            fetchall=True
+        ) or []
+
+        # Metrics
+        points_stats = execute_query(
+            """
+            SELECT 
+                COALESCE(SUM(current_balance), 0) AS total_circulating_points,
+                COALESCE(SUM(total_earned), 0) AS total_lifetime_points,
+                COUNT(*) AS total_active_wallets
+            FROM user_points_wallets
+            """,
+            fetchone=True
+        )
+
+        return render_template(
+            'admin_points.html',
+            wallets=wallets,
+            recent_txs=recent_txs,
+            stats=points_stats or {},
+            q=q
+        )
+
+    @app.route('/admin/points/user/<int:user_id>', methods=['GET', 'POST'])
+    @admin_required
+    def admin_user_wallet(user_id):
+        """View specific user's points ledger and perform manual points adjustment."""
+        user = execute_query("SELECT id, full_name, email FROM users WHERE id = %s", (user_id,), fetchone=True)
+        if not user:
+            flash("User not found.", "error")
+            return redirect(url_for('admin_points'))
+
+        if request.method == 'POST':
+            delta_raw = request.form.get('points_delta', '').strip()
+            reason = request.form.get('reason', '').strip()
+
+            if not reason:
+                flash("A mandatory explanation reason is required for manual points adjustment.", "error")
+                return redirect(url_for('admin_user_wallet', user_id=user_id))
+
+            try:
+                delta = int(delta_raw)
+            except ValueError:
+                flash("Points adjustment must be a valid non-zero integer.", "error")
+                return redirect(url_for('admin_user_wallet', user_id=user_id))
+
+            success, msg = manual_adjust_points(
+                user_id=user_id,
+                points_delta=delta,
+                reason=reason,
+                admin_id=session.get('admin_id')
+            )
+            if success:
+                flash(msg, "success")
+            else:
+                flash(msg, "error")
+            return redirect(url_for('admin_user_wallet', user_id=user_id))
+
+        wallet = get_or_create_wallet(user_id)
+        ledger = get_wallet_ledger(user_id)
+
+        user_submissions = execute_query(
+            """
+            SELECT id, submission_code, created_at, status, total_accepted_items, points_awarded, points_approved
+            FROM ewaste_submissions
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            """,
+            (user_id,),
+            fetchall=True
+        ) or []
+
+        return render_template(
+            'admin_user_wallet.html',
+            target_user=user,
+            wallet=wallet,
+            ledger=ledger,
+            submissions=user_submissions
+        )
+
+    @app.route('/admin/points/tiers', methods=['GET', 'POST'])
+    @admin_required
+    def admin_points_tiers():
+        """View and dynamically configure points tiers without modifying code."""
+        if request.method == 'POST':
+            tier_id_raw = request.form.get('tier_id', '').strip() or None
+            tier_name = request.form.get('tier_name', '').strip()
+            min_qty_raw = request.form.get('min_quantity', '1').strip()
+            max_qty_raw = request.form.get('max_quantity', '').strip() or None
+            points_raw = request.form.get('points_awarded', '0').strip()
+            is_active = 1 if request.form.get('is_active') in ('1', 'on', 'true') else 0
+
+            if not tier_name:
+                flash("Tier name is required.", "error")
+                return redirect(url_for('admin_points_tiers'))
+
+            try:
+                min_qty = int(min_qty_raw)
+                points_awarded = int(points_raw)
+                max_qty = int(max_qty_raw) if max_qty_raw else None
+                tier_id = int(tier_id_raw) if tier_id_raw else None
+            except ValueError:
+                flash("Quantities and points must be valid integers.", "error")
+                return redirect(url_for('admin_points_tiers'))
+
+            save_points_tier(
+                tier_name=tier_name,
+                min_quantity=min_qty,
+                max_quantity=max_qty,
+                points_awarded=points_awarded,
+                is_active=is_active,
+                tier_id=tier_id
+            )
+            flash(f"Points tier '{tier_name}' saved successfully.", "success")
+            return redirect(url_for('admin_points_tiers'))
+
+        tiers = get_active_points_tiers()
+        return render_template('admin_points_tiers.html', tiers=tiers)
+
+    # ==========================================================================
+    # 10. Recycler Management (Phase 9)
+    # ==========================================================================
+
+    @app.route('/admin/recyclers', methods=['GET', 'POST'])
+    @admin_required
+    def admin_recyclers():
+        """Recycler Directory and prospective partner management."""
+        if request.method == 'POST':
+            action = request.form.get('action', 'create')
+
+            if action in ('create', 'edit'):
+                recycler_id = request.form.get('recycler_id', '').strip() or None
+                name = request.form.get('name', '').strip()
+                contact_phone = request.form.get('contact_phone', '').strip()
+                email = request.form.get('email', '').strip() or None
+                accepted_cats = request.form.get('accepted_categories', '').strip() or None
+                min_pickup_qty = request.form.get('min_pickup_qty', '').strip() or None
+                pickup_availability = request.form.get('pickup_availability', '').strip() or None
+                payment_terms = request.form.get('payment_terms', '').strip() or None
+                status = request.form.get('status', 'prospective').strip()
+                collection_status = request.form.get('collection_status', 'Not Contacted').strip()
+                notes = request.form.get('notes', '').strip() or None
+
+                if not name or not contact_phone:
+                    flash("Recycler name and contact phone number are required.", "error")
+                    return redirect(url_for('admin_recyclers'))
+
+                if recycler_id and action == 'edit':
+                    execute_query(
+                        """
+                        UPDATE recyclers
+                        SET name = %s, contact_phone = %s, email = %s,
+                            accepted_categories = %s, min_pickup_qty = %s,
+                            pickup_availability = %s, payment_terms = %s,
+                            status = %s, collection_status = %s, notes = %s
+                        WHERE id = %s
+                        """,
+                        (
+                            name, contact_phone, email, accepted_cats, min_pickup_qty,
+                            pickup_availability, payment_terms, status, collection_status,
+                            notes, int(recycler_id)
+                        ),
+                        commit=True
+                    )
+                    flash(f"Recycler '{name}' updated successfully.", "success")
+                else:
+                    execute_query(
+                        """
+                        INSERT INTO recyclers (
+                            name, contact_phone, email, accepted_categories,
+                            min_pickup_qty, pickup_availability, payment_terms,
+                            status, collection_status, notes
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            name, contact_phone, email, accepted_cats, min_pickup_qty,
+                            pickup_availability, payment_terms, status, collection_status, notes
+                        ),
+                        commit=True
+                    )
+                    flash(f"New recycler '{name}' added successfully.", "success")
+
+                return redirect(url_for('admin_recyclers'))
+
+        recyclers = execute_query("SELECT * FROM recyclers ORDER BY id ASC", fetchall=True) or []
+        return render_template('admin_recyclers.html', recyclers=recyclers)
+

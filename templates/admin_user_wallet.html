@@ -1,0 +1,176 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}User Wallet - {{ target_user.full_name }} | EcoLocate Admin{% endblock %}
+
+{% block content %}
+<div class="admin-content-header" style="margin-bottom: 2rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <a href="{{ url_for('admin_points') }}" style="color: #059669; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem; margin-bottom: 0.5rem;">
+        &larr; Back to Points &amp; Wallets
+      </a>
+      <h1 style="font-size: 1.75rem; font-weight: 800; color: #111827; margin-bottom: 0.25rem;">
+        {{ target_user.full_name }}'s Points Wallet
+      </h1>
+      <p style="font-size: 0.9rem; color: #6b7280;">
+        User ID: {{ target_user.id }} | Email: {{ target_user.email }}
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Wallet KPI Cards -->
+<div class="admin-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #10b981;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Current Available Balance</div>
+    <div style="font-size: 2rem; font-weight: 800; color: #059669; margin-top: 0.25rem;">{{ wallet.current_balance if wallet else 0 }} pts</div>
+  </div>
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #3b82f6;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Lifetime Points Earned</div>
+    <div style="font-size: 2rem; font-weight: 800; color: #1d4ed8; margin-top: 0.25rem;">{{ wallet.total_earned if wallet else 0 }} pts</div>
+  </div>
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #8b5cf6;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Total Submissions</div>
+    <div style="font-size: 2rem; font-weight: 800; color: #7c3aed; margin-top: 0.25rem;">{{ submissions|length }}</div>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+
+  <!-- Manual Points Adjustment Form -->
+  <div class="card" style="padding: 1.5rem; border-radius: 8px; border-left: 4px solid #f59e0b;">
+    <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin-bottom: 0.5rem;">
+      Manual Points Adjustment
+    </h3>
+    <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 1.25rem;">
+      Manually credit or debit points for this user. A detailed, mandatory explanation reason is strictly required.
+    </p>
+
+    <form method="POST" action="{{ url_for('admin_user_wallet', user_id=target_user.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+      <div style="margin-bottom: 1rem;">
+        <label for="points_delta" style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 0.25rem;">
+          Points Adjustment Delta <span style="color: #ef4444;">*</span>
+        </label>
+        <input type="number" id="points_delta" name="points_delta" class="form-control" placeholder="e.g. +15 or -10" required>
+        <small style="color: #6b7280; font-size: 0.78rem;">Enter positive integer to credit points, or negative integer to debit.</small>
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <label for="reason" style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 0.25rem;">
+          Mandatory Explanation Reason <span style="color: #ef4444;">*</span>
+        </label>
+        <textarea id="reason" name="reason" class="form-control" rows="3" placeholder="Provide full administrative justification for this points adjustment..." required></textarea>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%; font-weight: 700;">
+        Submit Adjustment to Ledger
+      </button>
+    </form>
+  </div>
+
+  <!-- User Submissions History -->
+  <div class="card" style="padding: 1.5rem; border-radius: 8px;">
+    <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin-bottom: 1rem;">
+      Submissions by {{ target_user.full_name }}
+    </h3>
+    {% if submissions %}
+      <div class="table-responsive">
+        <table class="table" style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="border-bottom: 2px solid #e5e7eb; text-align: left; font-size: 0.82rem; color: #6b7280;">
+              <th style="padding: 0.5rem;">Code</th>
+              <th style="padding: 0.5rem;">Date</th>
+              <th style="padding: 0.5rem;">Accepted</th>
+              <th style="padding: 0.5rem;">Points</th>
+              <th style="padding: 0.5rem;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sub in submissions %}
+              <tr style="border-bottom: 1px solid #f3f4f6; font-size: 0.85rem;">
+                <td style="padding: 0.5rem; font-weight: 700;">
+                  <a href="{{ url_for('admin_submission_detail', submission_id=sub.id) }}" style="color: #059669;">
+                    {{ sub.submission_code }}
+                  </a>
+                </td>
+                <td style="padding: 0.5rem; color: #6b7280;">{{ sub.created_at.strftime('%d %b %Y') if sub.created_at else '' }}</td>
+                <td style="padding: 0.5rem; font-weight: 600; color: #047857;">{{ sub.total_accepted_items }}</td>
+                <td style="padding: 0.5rem; font-weight: 700; color: #10b981;">
+                  {% if sub.points_approved %}
+                    +{{ sub.points_awarded }}
+                  {% else %}
+                    (pending)
+                  {% endif %}
+                </td>
+                <td style="padding: 0.5rem;">
+                  <span class="badge" style="font-size: 0.72rem; padding: 0.15rem 0.4rem; border-radius: 4px; background: #f3f4f6;">
+                    {{ sub.status }}
+                  </span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div style="padding: 2rem; text-align: center; color: #9ca3af; font-size: 0.88rem;">
+        No submissions from this user yet.
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- User Points Ledger History -->
+<div class="card" style="padding: 1.5rem; border-radius: 8px;">
+  <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin-bottom: 1rem;">
+    User Points Transaction Ledger
+  </h3>
+  {% if ledger %}
+    <div class="table-responsive">
+      <table class="table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 2px solid #e5e7eb; text-align: left; font-size: 0.82rem; color: #6b7280;">
+            <th style="padding: 0.6rem;">Timestamp</th>
+            <th style="padding: 0.6rem;">Type</th>
+            <th style="padding: 0.6rem;">Reason / Details</th>
+            <th style="padding: 0.6rem; text-align: right;">Points Delta</th>
+            <th style="padding: 0.6rem; text-align: right;">Balance After</th>
+            <th style="padding: 0.6rem;">Created By</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tx in ledger %}
+            <tr style="border-bottom: 1px solid #f3f4f6; font-size: 0.85rem;">
+              <td style="padding: 0.6rem; color: #6b7280;">{{ tx.created_at.strftime('%d %b %Y, %I:%M %p') if tx.created_at else '' }}</td>
+              <td style="padding: 0.6rem;">
+                <span class="badge" style="font-size: 0.75rem; padding: 0.15rem 0.45rem; border-radius: 4px; background: #f3f4f6;">
+                  {{ tx.transaction_type }}
+                </span>
+              </td>
+              <td style="padding: 0.6rem; color: #111827;">{{ tx.reason }}</td>
+              <td style="padding: 0.6rem; text-align: right; font-weight: 700;">
+                {% if tx.points_amount > 0 %}
+                  <span style="color: #059669;">+{{ tx.points_amount }}</span>
+                {% else %}
+                  <span style="color: #dc2626;">{{ tx.points_amount }}</span>
+                {% endif %}
+              </td>
+              <td style="padding: 0.6rem; text-align: right; font-weight: 700; color: #111827;">
+                {{ tx.balance_after }} pts
+              </td>
+              <td style="padding: 0.6rem; color: #6b7280;">{{ tx.admin_username or 'System' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div style="padding: 2rem; text-align: center; color: #9ca3af; font-size: 0.88rem;">
+      No points transactions recorded for this user.
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

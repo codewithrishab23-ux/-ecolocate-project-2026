@@ -1,0 +1,252 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Recycler Partners Directory | EcoLocate Admin{% endblock %}
+
+{% block content %}
+<div class="admin-content-header" style="margin-bottom: 2rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1 style="font-size: 1.75rem; font-weight: 800; color: #111827; margin-bottom: 0.25rem;">
+        Recyclers &amp; Prospective Partners Directory
+      </h1>
+      <p style="font-size: 0.9rem; color: #6b7280;">
+        Manage authorized e-waste recyclers, logistics hotlines, and prospective recycling contacts.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Prospective Notice Callout -->
+<div class="card" style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 1.25rem; margin-bottom: 2rem; display: flex; gap: 1rem; align-items: flex-start;">
+  <div style="color: #d97706; font-size: 1.25rem; font-weight: 700;">ℹ</div>
+  <div style="font-size: 0.88rem; color: #92400e; line-height: 1.5;">
+    <strong>Verification Transparency Safeguard:</strong> Unverified contacts and hotlines (such as prospective hotline <code>1800 102 9077</code>) are tracked strictly under <em>"Prospective"</em> status. They are not displayed to users as certified official partners until commercial agreements, minimum pickup quantities, and regional logistics compliance have been physically vetted.
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem;">
+
+  <!-- Recyclers List -->
+  <div class="card" style="padding: 1.5rem; border-radius: 8px;">
+    <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin-bottom: 1rem;">
+      Registered Recyclers &amp; Contacts ({{ recyclers|length }})
+    </h3>
+
+    {% if recyclers %}
+      <div style="display: flex; flex-direction: column; gap: 1rem;">
+        {% for rec in recyclers %}
+          <div class="card" style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.25rem; background: #fafafa;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+              <div>
+                <h4 style="font-size: 1.05rem; font-weight: 700; color: #111827; margin: 0 0 0.25rem 0;">
+                  {{ rec.name }}
+                </h4>
+                <div style="font-size: 0.85rem; color: #047857; font-weight: 600;">
+                  📞 {{ rec.contact_phone }}
+                  {% if rec.email %} | ✉ {{ rec.email }}{% endif %}
+                </div>
+              </div>
+
+              <div>
+                {% if rec.status == 'verified_partner' %}
+                  <span class="badge" style="background:#dcfce7; color:#15803d; font-size:0.75rem; padding:0.25rem 0.6rem; border-radius:9999px;">Verified Partner</span>
+                {% elif rec.status == 'prospective' %}
+                  <span class="badge" style="background:#fef3c7; color:#b45309; font-size:0.75rem; padding:0.25rem 0.6rem; border-radius:9999px;">Prospective / Unverified</span>
+                {% else %}
+                  <span class="badge" style="background:#f3f4f6; color:#4b5563; font-size:0.75rem; padding:0.25rem 0.6rem; border-radius:9999px;">{{ rec.status }}</span>
+                {% endif %}
+              </div>
+            </div>
+
+            <div style="font-size: 0.85rem; color: #4b5563; line-height: 1.6; margin-bottom: 0.75rem;">
+              {% if rec.accepted_categories %}
+                <div><strong>Accepted Categories:</strong> {{ rec.accepted_categories }}</div>
+              {% endif %}
+              <div><strong>Min Pickup Qty:</strong> {{ rec.min_pickup_qty or 'Not specified' }} | <strong>Availability:</strong> {{ rec.pickup_availability or 'Pending inquiry' }}</div>
+              <div><strong>Collection Status:</strong> <span style="font-weight: 600; color: #0e3b2e;">{{ rec.collection_status or 'Not Contacted' }}</span></div>
+              {% if rec.notes %}
+                <div style="margin-top: 0.35rem; font-size: 0.8rem; color: #6b7280; font-style: italic;">
+                  {{ rec.notes }}
+                </div>
+              {% endif %}
+            </div>
+
+            <div style="display: flex; justify-content: flex-end;">
+              <button type="button" class="btn btn-outline btn-sm edit-rec-btn"
+                      data-id="{{ rec.id }}"
+                      data-name="{{ rec.name }}"
+                      data-phone="{{ rec.contact_phone }}"
+                      data-email="{{ rec.email or '' }}"
+                      data-cats="{{ rec.accepted_categories or '' }}"
+                      data-min="{{ rec.min_pickup_qty or '' }}"
+                      data-avail="{{ rec.pickup_availability or '' }}"
+                      data-terms="{{ rec.payment_terms or '' }}"
+                      data-status="{{ rec.status }}"
+                      data-colstatus="{{ rec.collection_status or 'Not Contacted' }}"
+                      data-notes="{{ rec.notes or '' }}"
+                      style="font-size: 0.8rem; padding: 0.25rem 0.6rem;">
+                Edit Details
+              </button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div style="padding: 2rem; text-align: center; color: #9ca3af;">
+        No recyclers registered.
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Add / Edit Recycler Form -->
+  <div class="card" style="padding: 1.5rem; border-radius: 8px;">
+    <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin-bottom: 0.5rem;" id="recFormTitle">
+      Add New Recycler Contact
+    </h3>
+    <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 1.25rem;">
+      Register a recycling facility, hotline, or prospective buyer.
+    </p>
+
+    <form method="POST" action="{{ url_for('admin_recyclers') }}" id="recForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="action" id="rec_action" value="create"/>
+      <input type="hidden" name="recycler_id" id="recycler_id" value=""/>
+
+      <div style="margin-bottom: 0.85rem;">
+        <label for="name" style="display: block; font-size: 0.82rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem;">
+          Recycler / Company Name <span style="color: #ef4444;">*</span>
+        </label>
+        <input type="text" id="name" name="name" class="form-control" placeholder="e.g. EcoGreen Recyclers Pvt Ltd" required>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+        <div>
+          <label for="contact_phone" style="display: block; font-size: 0.82rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem;">
+            Phone / Hotline <span style="color: #ef4444;">*</span>
+          </label>
+          <input type="text" id="contact_phone" name="contact_phone" class="form-control" placeholder="e.g. 1800 102 9077" required>
+        </div>
+        <div>
+          <label for="email" style="display: block; font-size: 0.82rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem;">
+            Email Address
+          </label>
+          <input type="email" id="email" name="email" class="form-control" placeholder="info@recycler.in">
+        </div>
+      </div>
+
+      <div style="margin-bottom: 0.85rem;">
+        <label for="accepted_categories" style="display: block; font-size: 0.82rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem;">
+          Accepted Categories
+        </label>
+        <input type="text" id="accepted_categories" name="accepted_categories" class="form-control" placeholder="e.g. Mobile phones, Laptops, Batteries">
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+        <div>
+          <label for="status" style="display: block; font-size: 0.82rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem;">
+            Verification Status
+          </label>
+          <select id="status" name="status" class="form-control">
+            <option value="prospective">Prospective / Unverified</option>
+            <option value="verified_partner">Verified Official Partner</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+        <div>
+          <label for="collection_status" style="display: block; font-size: 0.82rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem;">
+            Logistics Status
+          </label>
+          <select id="collection_status" name="collection_status" class="form-control">
+            <option value="Not Contacted">Not Contacted</option>
+            <option value="In Discussion">In Discussion</option>
+            <option value="Pickup Ready">Pickup Ready</option>
+            <option value="Suspended">Suspended</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+        <div>
+          <label for="min_pickup_qty" style="display: block; font-size: 0.82rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem;">
+            Min. Pickup Qty
+          </label>
+          <input type="text" id="min_pickup_qty" name="min_pickup_qty" class="form-control" placeholder="e.g. 50 kg or 10 devices">
+        </div>
+        <div>
+          <label for="pickup_availability" style="display: block; font-size: 0.82rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem;">
+            Pickup Availability
+          </label>
+          <input type="text" id="pickup_availability" name="pickup_availability" class="form-control" placeholder="e.g. Delhi-NCR, Weekly">
+        </div>
+      </div>
+
+      <div style="margin-bottom: 0.85rem;">
+        <label for="notes" style="display: block; font-size: 0.82rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem;">
+          Internal Admin Notes
+        </label>
+        <textarea id="notes" name="notes" class="form-control" rows="2" placeholder="e.g. Contact notes, gate access instructions, rates..."></textarea>
+      </div>
+
+      <div style="display: flex; gap: 0.5rem;">
+        <button type="submit" class="btn btn-primary" style="flex: 1; font-weight: 700;">Save Recycler</button>
+        <button type="button" id="recResetBtn" class="btn btn-ghost btn-sm" style="display: none;">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const editRecBtns = document.querySelectorAll('.edit-rec-btn');
+  const recFormTitle = document.getElementById('recFormTitle');
+  const recAction = document.getElementById('rec_action');
+  const recyclerId = document.getElementById('recycler_id');
+  const recName = document.getElementById('name');
+  const recPhone = document.getElementById('contact_phone');
+  const recEmail = document.getElementById('email');
+  const recCats = document.getElementById('accepted_categories');
+  const recStatus = document.getElementById('status');
+  const recColStatus = document.getElementById('collection_status');
+  const recMin = document.getElementById('min_pickup_qty');
+  const recAvail = document.getElementById('pickup_availability');
+  const recNotes = document.getElementById('notes');
+  const recResetBtn = document.getElementById('recResetBtn');
+
+  editRecBtns.forEach(btn => {
+    btn.addEventListener('click', function() {
+      recFormTitle.textContent = 'Edit Recycler Details';
+      recAction.value = 'edit';
+      recyclerId.value = this.dataset.id;
+      recName.value = this.dataset.name;
+      recPhone.value = this.dataset.phone;
+      recEmail.value = this.dataset.email;
+      recCats.value = this.dataset.cats;
+      recStatus.value = this.dataset.status;
+      recColStatus.value = this.dataset.colstatus;
+      recMin.value = this.dataset.min;
+      recAvail.value = this.dataset.avail;
+      recNotes.value = this.dataset.notes;
+      recResetBtn.style.display = 'inline-block';
+      window.scrollTo({ top: document.getElementById('recForm').offsetTop - 100, behavior: 'smooth' });
+    });
+  });
+
+  recResetBtn.addEventListener('click', function() {
+    recFormTitle.textContent = 'Add New Recycler Contact';
+    recAction.value = 'create';
+    recyclerId.value = '';
+    recName.value = '';
+    recPhone.value = '';
+    recEmail.value = '';
+    recCats.value = '';
+    recStatus.value = 'prospective';
+    recColStatus.value = 'Not Contacted';
+    recMin.value = '';
+    recAvail.value = '';
+    recNotes.value = '';
+    recResetBtn.style.display = 'none';
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,187 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Points Tiers Configuration | EcoLocate Admin{% endblock %}
+
+{% block content %}
+<div class="admin-content-header" style="margin-bottom: 2rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <a href="{{ url_for('admin_points') }}" style="color: #059669; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem; margin-bottom: 0.5rem;">
+        &larr; Back to Points &amp; Wallets
+      </a>
+      <h1 style="font-size: 1.75rem; font-weight: 800; color: #111827; margin-bottom: 0.25rem;">
+        Points Tiers Configuration
+      </h1>
+      <p style="font-size: 0.9rem; color: #6b7280;">
+        Dynamically modify points reward tiers without changing code. Points are evaluated per submission on verified accepted items.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem;">
+
+  <!-- Tiers Table -->
+  <div class="card" style="padding: 1.5rem; border-radius: 8px;">
+    <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin-bottom: 1rem;">
+      Active &amp; Configured Points Tiers
+    </h3>
+
+    {% if tiers %}
+      <div class="table-responsive">
+        <table class="table" style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="border-bottom: 2px solid #e5e7eb; text-align: left; font-size: 0.82rem; color: #6b7280;">
+              <th style="padding: 0.75rem;">Tier Name</th>
+              <th style="padding: 0.75rem;">Accepted Qty Range</th>
+              <th style="padding: 0.75rem; text-align: center;">Points Awarded</th>
+              <th style="padding: 0.75rem; text-align: center;">Status</th>
+              <th style="padding: 0.75rem; text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for tier in tiers %}
+              <tr style="border-bottom: 1px solid #f3f4f6; font-size: 0.88rem;">
+                <td style="padding: 0.75rem; font-weight: 700; color: #111827;">{{ tier.tier_name }}</td>
+                <td style="padding: 0.75rem; color: #4b5563;">
+                  {% if tier.max_quantity %}
+                    {% if tier.min_quantity == tier.max_quantity %}
+                      Exactly {{ tier.min_quantity }} item
+                    {% else %}
+                      {{ tier.min_quantity }} to {{ tier.max_quantity }} items
+                    {% endif %}
+                  {% else %}
+                    {{ tier.min_quantity }}+ items
+                  {% endif %}
+                </td>
+                <td style="padding: 0.75rem; text-align: center; font-weight: 800; color: #059669; font-size: 1rem;">
+                  {{ tier.points_awarded }} pts
+                </td>
+                <td style="padding: 0.75rem; text-align: center;">
+                  {% if tier.is_active %}
+                    <span class="badge" style="background:#dcfce7; color:#15803d; font-size:0.75rem; padding:0.2rem 0.5rem; border-radius:9999px;">Active</span>
+                  {% else %}
+                    <span class="badge" style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; padding:0.2rem 0.5rem; border-radius:9999px;">Inactive</span>
+                  {% endif %}
+                </td>
+                <td style="padding: 0.75rem; text-align: right;">
+                  <button type="button" class="btn btn-outline btn-sm edit-tier-btn" 
+                          data-id="{{ tier.id }}"
+                          data-name="{{ tier.tier_name }}"
+                          data-min="{{ tier.min_quantity }}"
+                          data-max="{{ tier.max_quantity or '' }}"
+                          data-pts="{{ tier.points_awarded }}"
+                          data-active="{{ tier.is_active }}"
+                          style="font-size: 0.8rem; padding: 0.25rem 0.5rem;">
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div style="padding: 2rem; text-align: center; color: #9ca3af;">
+        No points tiers configured.
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Add / Edit Tier Form -->
+  <div class="card" style="padding: 1.5rem; border-radius: 8px;">
+    <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin-bottom: 0.5rem;" id="formTitle">
+      Add New Points Tier
+    </h3>
+    <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 1.25rem;">
+      Define an accepted item quantity range and points awarded.
+    </p>
+
+    <form method="POST" action="{{ url_for('admin_points_tiers') }}" id="tierForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="tier_id" id="tier_id" value=""/>
+
+      <div style="margin-bottom: 1rem;">
+        <label for="tier_name" style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 0.25rem;">
+          Tier Name <span style="color: #ef4444;">*</span>
+        </label>
+        <input type="text" id="tier_name" name="tier_name" class="form-control" placeholder="e.g. 5-9 Items Tier" required>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+        <div>
+          <label for="min_quantity" style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 0.25rem;">
+            Min Qty <span style="color: #ef4444;">*</span>
+          </label>
+          <input type="number" id="min_quantity" name="min_quantity" class="form-control" min="1" value="1" required>
+        </div>
+        <div>
+          <label for="max_quantity" style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 0.25rem;">
+            Max Qty <small style="color: #9ca3af;">(Empty = +)</small>
+          </label>
+          <input type="number" id="max_quantity" name="max_quantity" class="form-control" placeholder="Leave empty for unlimited">
+        </div>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <label for="points_awarded" style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 0.25rem;">
+          Points Awarded <span style="color: #ef4444;">*</span>
+        </label>
+        <input type="number" id="points_awarded" name="points_awarded" class="form-control" min="0" value="10" required>
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; cursor: pointer;">
+          <input type="checkbox" name="is_active" id="is_active" value="1" checked style="accent-color: #10b981; width: 16px; height: 16px;">
+          <span>Tier is active and available for calculation</span>
+        </label>
+      </div>
+
+      <div style="display: flex; gap: 0.5rem;">
+        <button type="submit" class="btn btn-primary" style="flex: 1; font-weight: 700;">Save Tier</button>
+        <button type="button" id="resetBtn" class="btn btn-ghost btn-sm" style="display: none;">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const editBtns = document.querySelectorAll('.edit-tier-btn');
+  const formTitle = document.getElementById('formTitle');
+  const tierIdInput = document.getElementById('tier_id');
+  const tierNameInput = document.getElementById('tier_name');
+  const minQtyInput = document.getElementById('min_quantity');
+  const maxQtyInput = document.getElementById('max_quantity');
+  const ptsInput = document.getElementById('points_awarded');
+  const isActiveInput = document.getElementById('is_active');
+  const resetBtn = document.getElementById('resetBtn');
+
+  editBtns.forEach(btn => {
+    btn.addEventListener('click', function() {
+      formTitle.textContent = 'Edit Points Tier';
+      tierIdInput.value = this.dataset.id;
+      tierNameInput.value = this.dataset.name;
+      minQtyInput.value = this.dataset.min;
+      maxQtyInput.value = this.dataset.max;
+      ptsInput.value = this.dataset.pts;
+      isActiveInput.checked = this.dataset.active === '1';
+      resetBtn.style.display = 'inline-block';
+      window.scrollTo({ top: document.getElementById('tierForm').offsetTop - 100, behavior: 'smooth' });
+    });
+  });
+
+  resetBtn.addEventListener('click', function() {
+    formTitle.textContent = 'Add New Points Tier';
+    tierIdInput.value = '';
+    tierNameInput.value = '';
+    minQtyInput.value = '1';
+    maxQtyInput.value = '';
+    ptsInput.value = '10';
+    isActiveInput.checked = true;
+    resetBtn.style.display = 'none';
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,167 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Points &amp; Wallets Management | EcoLocate Admin{% endblock %}
+
+{% block content %}
+<div class="admin-content-header" style="margin-bottom: 2rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1 style="font-size: 1.75rem; font-weight: 800; color: #111827; margin-bottom: 0.25rem;">
+        Points Wallets &amp; Ledger Audit
+      </h1>
+      <p style="font-size: 0.9rem; color: #6b7280;">
+        Monitor user point balances, audit system transaction ledgers, and manage dynamic tier rules.
+      </p>
+    </div>
+
+    <div>
+      <a href="{{ url_for('admin_points_tiers') }}" class="btn btn-primary btn-sm">
+        Configure Dynamic Points Tiers
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- KPI Metrics -->
+<div class="admin-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #10b981;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Active Circulating Points</div>
+    <div style="font-size: 2rem; font-weight: 800; color: #059669; margin-top: 0.25rem;">{{ stats.total_circulating_points or 0 }} pts</div>
+  </div>
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #3b82f6;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Lifetime Awarded Points</div>
+    <div style="font-size: 2rem; font-weight: 800; color: #1d4ed8; margin-top: 0.25rem;">{{ stats.total_lifetime_points or 0 }} pts</div>
+  </div>
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #8b5cf6;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Active User Wallets</div>
+    <div style="font-size: 2rem; font-weight: 800; color: #7c3aed; margin-top: 0.25rem;">{{ stats.total_active_wallets or 0 }}</div>
+  </div>
+</div>
+
+<!-- Wallets Table with Search -->
+<div class="card" style="padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+    <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin: 0;">
+      User Points Wallets ({{ wallets|length }})
+    </h3>
+    <form method="GET" action="{{ url_for('admin_points') }}" style="display: flex; gap: 0.5rem;">
+      <input type="text" name="q" class="form-control" placeholder="Search user name/email..." value="{{ q }}" style="font-size: 0.85rem; padding: 0.35rem 0.75rem;">
+      <button type="submit" class="btn btn-outline btn-sm">Search</button>
+    </form>
+  </div>
+
+  {% if wallets %}
+    <div class="table-responsive">
+      <table class="table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 2px solid #e5e7eb; text-align: left; font-size: 0.82rem; color: #6b7280;">
+            <th style="padding: 0.75rem;">User</th>
+            <th style="padding: 0.75rem;">Email</th>
+            <th style="padding: 0.75rem; text-align: right;">Current Balance</th>
+            <th style="padding: 0.75rem; text-align: right;">Total Earned</th>
+            <th style="padding: 0.75rem; text-align: center;">Submissions</th>
+            <th style="padding: 0.75rem; text-align: center;">Ledger Entries</th>
+            <th style="padding: 0.75rem; text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for w in wallets %}
+            <tr style="border-bottom: 1px solid #f3f4f6; font-size: 0.88rem;">
+              <td style="padding: 0.75rem; font-weight: 600; color: #111827;">{{ w.full_name }}</td>
+              <td style="padding: 0.75rem; color: #6b7280;">{{ w.email }}</td>
+              <td style="padding: 0.75rem; text-align: right; font-weight: 800; color: #059669; font-size: 0.95rem;">
+                {{ w.current_balance }} pts
+              </td>
+              <td style="padding: 0.75rem; text-align: right; font-weight: 600; color: #1d4ed8;">
+                {{ w.total_earned }} pts
+              </td>
+              <td style="padding: 0.75rem; text-align: center;">{{ w.total_submissions }}</td>
+              <td style="padding: 0.75rem; text-align: center;">{{ w.tx_count }}</td>
+              <td style="padding: 0.75rem; text-align: right;">
+                <a href="{{ url_for('admin_user_wallet', user_id=w.user_id) }}" class="btn btn-outline btn-sm" style="font-size: 0.8rem; padding: 0.25rem 0.6rem;">
+                  View Wallet &amp; Adjust &rarr;
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div style="padding: 2rem; text-align: center; color: #9ca3af;">
+      No user wallets found.
+    </div>
+  {% endif %}
+</div>
+
+<!-- System-Wide Recent Points Transactions Ledger -->
+<div class="card" style="padding: 1.5rem; border-radius: 8px;">
+  <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin-bottom: 1rem;">
+    System-Wide Transactions Ledger (Recent 30 Events)
+  </h3>
+
+  {% if recent_txs %}
+    <div class="table-responsive">
+      <table class="table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 2px solid #e5e7eb; text-align: left; font-size: 0.82rem; color: #6b7280;">
+            <th style="padding: 0.75rem;">Timestamp</th>
+            <th style="padding: 0.75rem;">User</th>
+            <th style="padding: 0.75rem;">Type</th>
+            <th style="padding: 0.75rem;">Description / Reason</th>
+            <th style="padding: 0.75rem; text-align: right;">Delta</th>
+            <th style="padding: 0.75rem; text-align: right;">Balance After</th>
+            <th style="padding: 0.75rem;">Admin</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tx in recent_txs %}
+            <tr style="border-bottom: 1px solid #f3f4f6; font-size: 0.85rem;">
+              <td style="padding: 0.75rem; color: #6b7280;">
+                {{ tx.created_at.strftime('%d %b %Y, %I:%M %p') if tx.created_at else '' }}
+              </td>
+              <td style="padding: 0.75rem; font-weight: 600; color: #111827;">{{ tx.full_name }}</td>
+              <td style="padding: 0.75rem;">
+                {% if tx.transaction_type == 'submission_reward' %}
+                  <span class="badge" style="background:#dcfce7; color:#15803d; font-size:0.75rem;">Submission</span>
+                {% elif tx.transaction_type == 'manual_credit' %}
+                  <span class="badge" style="background:#dbeafe; color:#1e40af; font-size:0.75rem;">Manual Credit</span>
+                {% elif tx.transaction_type == 'manual_debit' %}
+                  <span class="badge" style="background:#fee2e2; color:#b91c1c; font-size:0.75rem;">Manual Debit</span>
+                {% else %}
+                  <span class="badge" style="background:#f3f4f6; color:#4b5563; font-size:0.75rem;">{{ tx.transaction_type }}</span>
+                {% endif %}
+              </td>
+              <td style="padding: 0.75rem; color: #374151;">
+                {{ tx.reason }}
+                {% if tx.submission_code %}
+                  <a href="{{ url_for('submission_detail', submission_code=tx.submission_code) }}" target="_blank" style="color: #059669; font-size: 0.8rem; margin-left: 0.25rem;">
+                    [{{ tx.submission_code }}]
+                  </a>
+                {% endif %}
+              </td>
+              <td style="padding: 0.75rem; text-align: right; font-weight: 700;">
+                {% if tx.points_amount > 0 %}
+                  <span style="color: #059669;">+{{ tx.points_amount }}</span>
+                {% else %}
+                  <span style="color: #dc2626;">{{ tx.points_amount }}</span>
+                {% endif %}
+              </td>
+              <td style="padding: 0.75rem; text-align: right; font-weight: 700; color: #111827;">
+                {{ tx.balance_after }} pts
+              </td>
+              <td style="padding: 0.75rem; color: #6b7280; font-size: 0.8rem;">
+                {{ tx.admin_username or 'System' }}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div style="padding: 2rem; text-align: center; color: #9ca3af;">
+      No ledger transactions recorded yet.
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
