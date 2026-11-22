@@ -1,0 +1,123 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Email Management &amp; Templates | EcoLocate Admin{% endblock %}
+
+{% block content %}
+<div class="admin-content-header" style="margin-bottom: 2rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1 style="font-size: 1.75rem; font-weight: 800; color: #111827; margin-bottom: 0.25rem;">
+        Email Notification &amp; Template Management
+      </h1>
+      <p style="font-size: 0.9rem; color: #6b7280;">
+        Customize automated email notifications for SGT University students and general citizens without code modification.
+      </p>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem;">
+      <a href="{{ url_for('admin_email_history') }}" class="btn btn-outline btn-sm">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.25rem;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        View Email History &amp; Logs
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- KPI Metrics Cards -->
+<div class="admin-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Configured Templates</div>
+    <div style="font-size: 1.75rem; font-weight: 800; color: #111827; margin-top: 0.25rem;">{{ templates|length }}</div>
+  </div>
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #10b981;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Emails Dispatched (Sent)</div>
+    <div style="font-size: 1.75rem; font-weight: 800; color: #059669; margin-top: 0.25rem;">{{ sent_logs }}</div>
+  </div>
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #ef4444;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Delivery Failures</div>
+    <div style="font-size: 1.75rem; font-weight: 800; color: #dc2626; margin-top: 0.25rem;">{{ failed_logs }}</div>
+  </div>
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #8b5cf6;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Total Logged Attempts</div>
+    <div style="font-size: 1.75rem; font-weight: 800; color: #7c3aed; margin-top: 0.25rem;">{{ total_logs }}</div>
+  </div>
+</div>
+
+<!-- Architecture & Template Explanation Banner -->
+<div class="card" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1.25rem; margin-bottom: 2rem;">
+  <div style="display: flex; gap: 1rem; align-items: flex-start;">
+    <div style="background: #10b981; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-weight: 700;">
+      ✉
+    </div>
+    <div style="font-size: 0.88rem; color: #065f46; line-height: 1.6;">
+      <strong>Independent Template Routing:</strong>
+      When a user submits the e-waste form or when an administrator confirms a request, the system automatically detects whether the submitter is an <strong>SGT University Student</strong> or a <strong>General User / Other University Student</strong>, and routes the corresponding template. Editing one template never alters the other.
+    </div>
+  </div>
+</div>
+
+<!-- Templates List Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.5rem;">
+  {% for tpl in templates %}
+    <div class="card" style="padding: 1.5rem; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-between; border-top: 4px solid {% if tpl.user_category == 'sgt_student' %}#0e3b2e{% else %}#0284c7{% endif %};">
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+          <div>
+            {% if tpl.user_category == 'sgt_student' %}
+              <span class="badge" style="background: #dbeafe; color: #1e40af; font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px;">
+                SGT University Student
+              </span>
+            {% else %}
+              <span class="badge" style="background: #e0f2fe; color: #0369a1; font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px;">
+                General User / Other College
+              </span>
+            {% endif %}
+
+            <span class="badge" style="background: #f3f4f6; color: #374151; font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; margin-left: 0.25rem;">
+              {% if tpl.email_type == 'submission_received' %}
+                Submission Received
+              {% elif tpl.email_type == 'request_confirmed' %}
+                Request Confirmed
+              {% else %}
+                {{ tpl.email_type }}
+              {% endif %}
+            </span>
+          </div>
+
+          <div>
+            {% if tpl.is_active %}
+              <span class="badge" style="background: #dcfce7; color: #15803d; font-size: 0.75rem; padding: 0.15rem 0.4rem; border-radius: 9999px;">Active</span>
+            {% else %}
+              <span class="badge" style="background: #fee2e2; color: #b91c1c; font-size: 0.75rem; padding: 0.15rem 0.4rem; border-radius: 9999px;">Inactive</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin: 0 0 0.5rem 0;">
+          {{ tpl.template_name }}
+        </h3>
+
+        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.75rem; font-size: 0.85rem; color: #374151; margin-bottom: 1rem;">
+          <div><strong style="color: #6b7280;">Subject:</strong> {{ tpl.subject }}</div>
+          <div style="margin-top: 0.35rem;"><strong style="color: #6b7280;">Sender Name:</strong> {{ tpl.sender_display_name }}</div>
+        </div>
+
+        <p style="font-size: 0.85rem; color: #6b7280; line-height: 1.5; margin-bottom: 1rem;">
+          {{ tpl.confirmation_message }}
+        </p>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f3f4f6; padding-top: 1rem; margin-top: 0.5rem;">
+        <span style="font-size: 0.75rem; color: #9ca3af;">
+          Key: <code>{{ tpl.template_key }}</code>
+        </span>
+        <a href="{{ url_for('admin_email_template_edit', template_id=tpl.id) }}" class="btn btn-primary btn-sm" style="font-size: 0.85rem; padding: 0.35rem 0.85rem;">
+          Edit &amp; Preview Template &rarr;
+        </a>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

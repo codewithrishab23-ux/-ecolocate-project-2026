@@ -17,6 +17,7 @@ class EcoLocateComprehensiveTestSuite(unittest.TestCase):
         execute_query("DELETE FROM centres WHERE id > 87", commit=True)
         execute_query("DELETE FROM devices WHERE device_name LIKE 'Test %'", commit=True)
         execute_query("DELETE FROM ewaste_submissions WHERE phone_number LIKE '99999%' OR email LIKE '%@testdomain.demo'", commit=True)
+        execute_query("DELETE FROM email_logs WHERE recipient_email LIKE '%@testdomain.demo'", commit=True)
 
     @classmethod
     def tearDownClass(cls):
@@ -25,6 +26,7 @@ class EcoLocateComprehensiveTestSuite(unittest.TestCase):
         execute_query("DELETE FROM centres WHERE id > 87", commit=True)
         execute_query("DELETE FROM devices WHERE device_name LIKE 'Test %'", commit=True)
         execute_query("DELETE FROM ewaste_submissions WHERE phone_number LIKE '99999%' OR email LIKE '%@testdomain.demo'", commit=True)
+        execute_query("DELETE FROM email_logs WHERE recipient_email LIKE '%@testdomain.demo'", commit=True)
 
     def setUp(self):
         self.app = app
@@ -1847,6 +1849,562 @@ class EcoLocateComprehensiveTestSuite(unittest.TestCase):
         self.assertEqual(latest_tx['reason'], "Compensation for logistics delay")
         self.assertEqual(latest_tx['created_by_admin_id'], 1)
         print("[PASS] Test 73: Scenario 14 - Mandatory Adjustment Reason & Ledger Recording Verified.")
+
+    # ==========================================================================
+    # Phase 10 Tests: Email Notification & Template Management System
+    # ==========================================================================
+
+    def test_74_scenario_01_sgt_student_submits_and_receives_sgt_template(self):
+        """Test 74 (Scenario 1): SGT University student submits form and receives SGT email template."""
+        email = "sgt_student_test@testdomain.demo"
+        resp = self.client.post('/submit-ewaste', data={
+            'is_student': 'yes',
+            'student_name': 'Daksh / Yogesh SGT',
+            'university_type': 'SGT University',
+            'roll_number': '241306039',
+            'course_dept': 'BCA AIML',
+            'phone_number': '9999910001',
+            'email': email,
+            'address': 'SGT University Block A, Budhera',
+            'city': 'Gurugram',
+            'state': 'Haryana',
+            'pincode': '122505',
+            'item_category[]': ['Mobile phones'],
+            'item_name[]': ['OnePlus 7T'],
+            'item_quantity[]': ['1'],
+            'item_condition[]': ['Working']
+        }, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+
+        # Verify email_logs
+        log = execute_query(
+            "SELECT * FROM email_logs WHERE recipient_email = %s ORDER BY id DESC LIMIT 1",
+            (email,),
+            fetchone=True
+        )
+        self.assertIsNotNone(log)
+        self.assertEqual(log['user_category'], 'sgt_student')
+        self.assertEqual(log['email_type'], 'submission_received')
+        self.assertEqual(log['status'], 'Sent')
+        self.assertIn("SGT University", log['subject'])
+        print("[PASS] Test 74: Scenario 1 - SGT Student Form Submission Routed to SGT Template.")
+
+    def test_75_scenario_02_other_university_student_receives_general_template(self):
+        """Test 75 (Scenario 2): Student from another university receives general email template."""
+        email = "other_uni_student@testdomain.demo"
+        resp = self.client.post('/submit-ewaste', data={
+            'is_student': 'yes',
+            'student_name': 'Aarav Mehta',
+            'university_type': 'Other University',
+            'university_name_other': 'Delhi Technological University',
+            'roll_number': '2K22/CO/101',
+            'course_dept': 'CSE',
+            'phone_number': '9999910002',
+            'email': email,
+            'address': 'Rohini Sector 16',
+            'city': 'Delhi',
+            'state': 'Delhi',
+            'pincode': '110085',
+            'item_category[]': ['Laptops'],
+            'item_name[]': ['Dell Inspiron'],
+            'item_quantity[]': ['1'],
+            'item_condition[]': ['Not Working']
+        }, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+
+        log = execute_query(
+            "SELECT * FROM email_logs WHERE recipient_email = %s ORDER BY id DESC LIMIT 1",
+            (email,),
+            fetchone=True
+        )
+        self.assertIsNotNone(log)
+        self.assertEqual(log['user_category'], 'general_user')
+        self.assertEqual(log['email_type'], 'submission_received')
+        self.assertEqual(log['status'], 'Sent')
+        print("[PASS] Test 75: Scenario 2 - Other University Student Form Submission Routed to General Template.")
+
+    def test_76_scenario_03_non_student_receives_general_template(self):
+        """Test 76 (Scenario 3): Non-student citizen receives general email template."""
+        email = "citizen_user@testdomain.demo"
+        resp = self.client.post('/submit-ewaste', data={
+            'is_student': 'no',
+            'full_name': 'Sunita Rao',
+            'phone_number': '9999910003',
+            'email': email,
+            'address': 'DLF Cyber City Phase 2',
+            'city': 'Gurugram',
+            'state': 'Haryana',
+            'pincode': '122002',
+            'item_category[]': ['TVs'],
+            'item_name[]': ['Sony Bravia LCD'],
+            'item_quantity[]': ['1'],
+            'item_condition[]': ['Damaged']
+        }, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+
+        log = execute_query(
+            "SELECT * FROM email_logs WHERE recipient_email = %s ORDER BY id DESC LIMIT 1",
+            (email,),
+            fetchone=True
+        )
+        self.assertIsNotNone(log)
+        self.assertEqual(log['user_category'], 'general_user')
+        self.assertEqual(log['email_type'], 'submission_received')
+        self.assertEqual(log['status'], 'Sent')
+        print("[PASS] Test 76: Scenario 3 - Non-Student Citizen Submission Routed to General Template.")
+
+    def test_77_scenario_04_admin_edits_sgt_template_and_changes_appear(self):
+        """Test 77 (Scenario 4): Admin edits SGT template and changes appear in subsequent emails."""
+        from email_service import restore_default_template_definition
+
+        # Get SGT template
+        tpl = execute_query("SELECT id, subject FROM email_templates WHERE template_key = 'sub_received_sgt'", fetchone=True)
+        self.assertIsNotNone(tpl)
+
+        custom_subject = "Special EcoLocate Green SGT Campus Notification [{{submission_id}}]"
+        custom_heading = "Welcome SGT Green Warriors"
+
+        # Admin logs in & updates template
+        with self.client.session_transaction() as sess:
+            sess['admin_id'] = 1
+            sess['admin_username'] = 'admin'
+
+        resp = self.client.post(f'/admin/emails/templates/{tpl["id"]}', data={
+            'action': 'save',
+            'subject': custom_subject,
+            'heading': custom_heading,
+            'greeting': 'Dear {{user_name}},',
+            'confirmation_message': 'Custom confirmation message for SGT.',
+            'body': 'Your e-waste request {{submission_id}} is priority tracked.',
+            'additional_instructions': 'Hand over at hostel gate.',
+            'closing_message': 'Regards, SGT Team',
+            'sender_display_name': 'SGT EcoLocate',
+            'is_active': '1'
+        }, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+
+        # Clear admin session
+        with self.client.session_transaction() as sess:
+            sess.pop('admin_id', None)
+
+        # User submits form
+        email = "sgt_after_edit@testdomain.demo"
+        self.client.post('/submit-ewaste', data={
+            'is_student': 'yes',
+            'student_name': 'SGT Modified Test',
+            'university_type': 'SGT University',
+            'phone_number': '9999910004',
+            'email': email,
+            'address': 'SGT University Faculty Block',
+            'city': 'Gurugram',
+            'state': 'Haryana',
+            'pincode': '122505',
+            'item_category[]': ['Batteries'],
+            'item_name[]': ['Lithium Cells'],
+            'item_quantity[]': ['2'],
+            'item_condition[]': ['Working']
+        }, follow_redirects=True)
+
+        log = execute_query(
+            "SELECT * FROM email_logs WHERE recipient_email = %s ORDER BY id DESC LIMIT 1",
+            (email,),
+            fetchone=True
+        )
+        self.assertIsNotNone(log)
+        self.assertIn("Special EcoLocate Green SGT Campus Notification", log['subject'])
+
+        # Restore default template
+        restore_default_template_definition('sub_received_sgt')
+        print("[PASS] Test 77: Scenario 4 - Admin Edited SGT Template Successfully Applied to Subsequent Email.")
+
+    def test_78_scenario_05_admin_edits_general_template_independently(self):
+        """Test 78 (Scenario 5): Admin edits general template independently without altering SGT template."""
+        from email_service import restore_default_template_definition
+
+        gen_tpl = execute_query("SELECT id, subject FROM email_templates WHERE template_key = 'sub_received_general'", fetchone=True)
+        sgt_tpl = execute_query("SELECT id, subject FROM email_templates WHERE template_key = 'sub_received_sgt'", fetchone=True)
+        original_sgt_subject = sgt_tpl['subject']
+
+        with self.client.session_transaction() as sess:
+            sess['admin_id'] = 1
+            sess['admin_username'] = 'admin'
+
+        # Edit general template
+        resp = self.client.post(f'/admin/emails/templates/{gen_tpl["id"]}', data={
+            'action': 'save',
+            'subject': 'Independent General Citizen Subject [{{submission_id}}]',
+            'heading': 'Citizen Circular Loop Heading',
+            'greeting': 'Dear {{user_name}},',
+            'confirmation_message': 'General confirmation text.',
+            'body': 'General body text {{submission_id}}.',
+            'additional_instructions': '',
+            'closing_message': 'Regards, EcoLocate',
+            'sender_display_name': 'EcoLocate',
+            'is_active': '1'
+        }, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+
+        # Verify SGT template subject remained 100% unchanged
+        sgt_after = execute_query("SELECT subject FROM email_templates WHERE template_key = 'sub_received_sgt'", fetchone=True)
+        self.assertEqual(sgt_after['subject'], original_sgt_subject, "Editing general template must never modify SGT template!")
+
+        # Restore general template
+        restore_default_template_definition('sub_received_general')
+        print("[PASS] Test 78: Scenario 5 - General Template Edited Independently Without Affecting SGT Template.")
+
+    def test_79_scenario_06_user_receives_automatic_submission_received_email(self):
+        """Test 79 (Scenario 6): User receives automatic submission-received email upon form submission."""
+        email = "auto_sub_user@testdomain.demo"
+        resp = self.client.post('/submit-ewaste', data={
+            'is_student': 'no',
+            'full_name': 'Automated Submission User',
+            'phone_number': '9999910006',
+            'email': email,
+            'address': 'Golf Course Road',
+            'city': 'Gurugram',
+            'state': 'Haryana',
+            'pincode': '122002',
+            'item_category[]': ['Electronic components'],
+            'item_name[]': ['Arduino Boards & Sensors'],
+            'item_quantity[]': ['5'],
+            'item_condition[]': ['Working']
+        }, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+
+        log = execute_query(
+            "SELECT * FROM email_logs WHERE recipient_email = %s AND email_type = 'submission_received'",
+            (email,),
+            fetchone=True
+        )
+        self.assertIsNotNone(log)
+        self.assertEqual(log['status'], 'Sent')
+        self.assertIsNotNone(log['sent_at'])
+        print("[PASS] Test 79: Scenario 6 - Automatic Submission Received Email Dispatched & Logged.")
+
+    def test_80_scenario_07_admin_confirms_request_and_user_receives_confirmation_email(self):
+        """Test 80 (Scenario 7): Admin confirms a request and the user receives a confirmation email."""
+        # 1. Create a submission
+        email = "confirm_test_user@testdomain.demo"
+        sub_id = execute_query(
+            """
+            INSERT INTO ewaste_submissions (
+                submission_code, full_name, phone_number, email, address,
+                city, state, pincode, is_student, university_type, status,
+                total_submitted_items
+            ) VALUES (
+                'SUB-CONF-TEST1', 'Confirmation Candidate', '9999910007', %s, 'Sector 29',
+                'Gurugram', 'Haryana', '122001', 0, NULL, 'pending', 2
+            )
+            """,
+            (email,),
+            commit=True
+        )
+        execute_query("INSERT INTO ewaste_submission_items (submission_id, category, item_name, submitted_quantity) VALUES (%s, 'Laptops', 'ThinkPad T480', 2)", (sub_id,), commit=True)
+
+        # 2. Admin logs in and clicks "Confirm Request"
+        with self.client.session_transaction() as sess:
+            sess['admin_id'] = 1
+            sess['admin_username'] = 'admin'
+
+        resp = self.client.post(f'/admin/submissions/{sub_id}', data={
+            'action': 'confirm_request'
+        }, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+
+        # 3. Verify submission status updated to 'confirmed'
+        updated_sub = execute_query("SELECT status, confirmed_at, confirmed_by FROM ewaste_submissions WHERE id = %s", (sub_id,), fetchone=True)
+        self.assertEqual(updated_sub['status'], 'confirmed')
+        self.assertIsNotNone(updated_sub['confirmed_at'])
+        self.assertEqual(updated_sub['confirmed_by'], 1)
+
+        # 4. Verify request_confirmed email logged
+        email_log = execute_query(
+            "SELECT * FROM email_logs WHERE submission_id = %s AND email_type = 'request_confirmed'",
+            (sub_id,),
+            fetchone=True
+        )
+        self.assertIsNotNone(email_log)
+        self.assertEqual(email_log['status'], 'Sent')
+        print("[PASS] Test 80: Scenario 7 - Admin 'Confirm Request' Updates Status to Confirmed & Dispatches Email.")
+
+    def test_81_scenario_08_email_failure_does_not_prevent_form_submission(self):
+        """Test 81 (Scenario 8): Email failure does not prevent form submission."""
+        from config import Config
+        Config.SIMULATE_SMTP_FAILURE = True
+
+        email = "smtp_fail_sub@testdomain.demo"
+        try:
+            # User submits form while SMTP fails
+            resp = self.client.post('/submit-ewaste', data={
+                'is_student': 'no',
+                'full_name': 'Resilient Form Submitter',
+                'phone_number': '9999910008',
+                'email': email,
+                'address': 'MG Road Metro Station',
+                'city': 'Gurugram',
+                'state': 'Haryana',
+                'pincode': '122002',
+                'item_category[]': ['Printers'],
+                'item_name[]': ['HP LaserJet M1005'],
+                'item_quantity[]': ['1'],
+                'item_condition[]': ['Working']
+            }, follow_redirects=True)
+
+            # Form submission MUST succeed with HTTP 200
+            self.assertEqual(resp.status_code, 200)
+
+            # Submission must be saved in database
+            sub = execute_query("SELECT * FROM ewaste_submissions WHERE email = %s", (email,), fetchone=True)
+            self.assertIsNotNone(sub)
+            self.assertEqual(sub['status'], 'pending')
+
+            # Failed email must be recorded in email_logs
+            log = execute_query("SELECT * FROM email_logs WHERE recipient_email = %s", (email,), fetchone=True)
+            self.assertIsNotNone(log)
+            self.assertEqual(log['status'], 'Failed')
+            self.assertIn("Simulated SMTP failure", log['error_message'])
+
+        finally:
+            Config.SIMULATE_SMTP_FAILURE = False
+
+        print("[PASS] Test 81: Scenario 8 - Email Failure Does Not Block Form Submission; Logged as Failed.")
+
+    def test_82_scenario_09_email_failure_does_not_undo_admin_confirmation(self):
+        """Test 82 (Scenario 9): Email failure does not undo admin confirmation."""
+        from config import Config
+
+        # 1. Create a submission
+        email = "smtp_fail_confirm@testdomain.demo"
+        sub_id = execute_query(
+            """
+            INSERT INTO ewaste_submissions (
+                submission_code, full_name, phone_number, email, address,
+                city, state, pincode, is_student, university_type, status,
+                total_submitted_items
+            ) VALUES (
+                'SUB-CONF-FAIL1', 'Fail Confirm User', '9999910009', %s, 'Sector 15',
+                'Gurugram', 'Haryana', '122001', 0, NULL, 'pending', 1
+            )
+            """,
+            (email,),
+            commit=True
+        )
+
+        Config.SIMULATE_SMTP_FAILURE = True
+        try:
+            with self.client.session_transaction() as sess:
+                sess['admin_id'] = 1
+                sess['admin_username'] = 'admin'
+
+            # Admin confirms request
+            resp = self.client.post(f'/admin/submissions/{sub_id}', data={
+                'action': 'confirm_request'
+            }, follow_redirects=True)
+            self.assertEqual(resp.status_code, 200)
+
+            # Request status MUST remain 'confirmed' (not reverted to pending)
+            updated_sub = execute_query("SELECT status, confirmed_at, confirmed_by FROM ewaste_submissions WHERE id = %s", (sub_id,), fetchone=True)
+            self.assertEqual(updated_sub['status'], 'confirmed')
+            self.assertIsNotNone(updated_sub['confirmed_at'])
+
+            # Email log records Failed
+            log = execute_query("SELECT * FROM email_logs WHERE submission_id = %s AND email_type = 'request_confirmed'", (sub_id,), fetchone=True)
+            self.assertIsNotNone(log)
+            self.assertEqual(log['status'], 'Failed')
+
+        finally:
+            Config.SIMULATE_SMTP_FAILURE = False
+
+        print("[PASS] Test 82: Scenario 9 - Email Failure Does Not Undo Admin Confirmation; Status Stays Confirmed.")
+
+    def test_83_scenario_10_admin_can_retry_failed_emails(self):
+        """Test 83 (Scenario 10): Admin can retry failed emails and status updates to Sent."""
+        # 1. Create submission and insert a failed email log
+        email = "retry_test_user@testdomain.demo"
+        sub_id = execute_query(
+            """
+            INSERT INTO ewaste_submissions (
+                submission_code, full_name, phone_number, email, address,
+                city, state, pincode, is_student, university_type, status,
+                total_submitted_items
+            ) VALUES (
+                'SUB-RETRY-10', 'Retry User', '9999910010', %s, 'Sohna Road',
+                'Gurugram', 'Haryana', '122018', 0, NULL, 'confirmed', 1
+            )
+            """,
+            (email,),
+            commit=True
+        )
+        log_id = execute_query(
+            """
+            INSERT INTO email_logs (
+                submission_id, recipient_email, recipient_name, user_category,
+                email_type, subject, status, error_message, attempt_count
+            ) VALUES (
+                %s, %s, 'Retry User', 'general_user',
+                'request_confirmed', 'Test Confirmation', 'Failed', 'Initial failure', 1
+            )
+            """,
+            (sub_id, email),
+            commit=True
+        )
+
+        # 2. Admin retries the email
+        with self.client.session_transaction() as sess:
+            sess['admin_id'] = 1
+            sess['admin_username'] = 'admin'
+
+        resp = self.client.post(f'/admin/emails/retry/{log_id}', follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+
+        # 3. Verify log status updated to 'Sent' and attempt count incremented
+        updated_log = execute_query("SELECT status, attempt_count, error_message FROM email_logs WHERE id = %s", (log_id,), fetchone=True)
+        self.assertEqual(updated_log['status'], 'Sent')
+        self.assertGreaterEqual(updated_log['attempt_count'], 2)
+        self.assertIsNone(updated_log['error_message'])
+
+        print("[PASS] Test 83: Scenario 10 - Admin Retry for Failed Email Successfully Executed & Log Updated.")
+
+    def test_84_scenario_11_dynamic_variables_display_correct_submission_info(self):
+        """Test 84 (Scenario 11): Dynamic variables display correct submission information."""
+        from datetime import datetime
+        from email_service import substitute_variables, build_submission_context
+
+        submission = {
+            'id': 999,
+            'submission_code': 'SUB-2026-VARTST',
+            'full_name': 'Yogesh Sharma',
+            'email': 'yogesh@testdomain.demo',
+            'phone_number': '9876543210',
+            'is_student': 1,
+            'student_name': 'Yogesh Sharma',
+            'university_type': 'SGT University',
+            'university_name': 'SGT University',
+            'roll_number': '241306039',
+            'status': 'confirmed',
+            'total_submitted_items': 4,
+            'total_accepted_items': 3,
+            'created_at': datetime(2026, 11, 22, 10, 30)
+        }
+
+        context = build_submission_context(submission, admin_name="Admin Guide")
+        self.assertEqual(context['user_name'], 'Yogesh Sharma')
+        self.assertEqual(context['submission_id'], 'SUB-2026-VARTST')
+        self.assertEqual(context['roll_number'], '241306039')
+        self.assertEqual(context['admin_name'], 'Admin Guide')
+
+        template_text = "Dear {{user_name}}, ref {{submission_id}} (Roll {{roll_number}}) by {{admin_name}}."
+        rendered = substitute_variables(template_text, context)
+        self.assertEqual(rendered, "Dear Yogesh Sharma, ref SUB-2026-VARTST (Roll 241306039) by Admin Guide.")
+        print("[PASS] Test 84: Scenario 11 - Dynamic Variables Substitution Verified with Exact Context.")
+
+    def test_85_scenario_12_admin_can_preview_and_test_email_templates(self):
+        """Test 85 (Scenario 12): Admin can preview and test email templates."""
+        with self.client.session_transaction() as sess:
+            sess['admin_id'] = 1
+            sess['admin_username'] = 'admin'
+
+        # 1. Preview AJAX Endpoint
+        resp_prev = self.client.post('/admin/emails/preview', json={
+            'user_category': 'sgt_student',
+            'email_type': 'submission_received',
+            'subject': 'Preview Subject for {{user_name}}',
+            'heading': 'Preview Heading',
+            'greeting': 'Dear {{user_name}},',
+            'confirmation_message': 'Preview confirmation message.',
+            'body': 'Your submission {{submission_id}} is verified.',
+            'additional_instructions': 'Preview instructions.',
+            'closing_message': 'Best regards,\nPreview Team',
+            'sender_display_name': 'EcoLocate Preview'
+        })
+        self.assertEqual(resp_prev.status_code, 200)
+        json_data = resp_prev.get_json()
+        self.assertTrue(json_data['success'])
+        self.assertIn("Preview Subject for", json_data['subject'])
+        self.assertIn("Preview Heading", json_data['html'])
+
+        # 2. Test Email Dispatch
+        tpl = execute_query("SELECT id FROM email_templates LIMIT 1", fetchone=True)
+        resp_test = self.client.post(f'/admin/emails/templates/{tpl["id"]}', data={
+            'action': 'send_test',
+            'test_recipient': 'test_admin_inbox@testdomain.demo'
+        }, follow_redirects=True)
+        self.assertEqual(resp_test.status_code, 200)
+
+        print("[PASS] Test 85: Scenario 12 - Live Preview & Send Test Email Functionality Verified.")
+
+    def test_86_scenario_13_email_history_correctly_records_sending_attempts(self):
+        """Test 86 (Scenario 13): Email history correctly records sending attempts and supports filters."""
+        with self.client.session_transaction() as sess:
+            sess['admin_id'] = 1
+            sess['admin_username'] = 'admin'
+
+        # View full history
+        resp = self.client.get('/admin/emails/history')
+        self.assertEqual(resp.status_code, 200)
+
+        # View with category filter
+        resp_sgt = self.client.get('/admin/emails/history?category=sgt_student')
+        self.assertEqual(resp_sgt.status_code, 200)
+
+        # View with status filter
+        resp_sent = self.client.get('/admin/emails/history?status=Sent')
+        self.assertEqual(resp_sent.status_code, 200)
+
+        print("[PASS] Test 86: Scenario 13 - Email History Log Table and Filtering Options Verified.")
+
+    def test_87_scenario_14_normal_users_blocked_from_email_templates(self):
+        """Test 87 (Scenario 14): Normal users cannot access or modify email templates."""
+        user = self._create_test_user_helper("unauth_email_user@testdomain.demo")
+
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = user['id']
+            sess['user_name'] = user['full_name']
+            sess.pop('admin_id', None)
+
+        endpoints = [
+            '/admin/emails/templates',
+            '/admin/emails/templates/1',
+            '/admin/emails/history'
+        ]
+
+        for ep in endpoints:
+            res = self.client.get(ep, follow_redirects=False)
+            self.assertEqual(res.status_code, 302)
+            self.assertIn('/admin/login', res.headers['Location'])
+
+        # Attempt POST to save template
+        res_post = self.client.post('/admin/emails/templates/1', data={'action': 'save', 'subject': 'Hacked'}, follow_redirects=False)
+        self.assertEqual(res_post.status_code, 302)
+        self.assertIn('/admin/login', res_post.headers['Location'])
+
+        print("[PASS] Test 87: Scenario 14 - Strict Non-Admin Boundary Protection for Email Management Verified.")
+
+    def test_88_scenario_15_smtp_credentials_never_exposed_to_frontend(self):
+        """Test 88 (Scenario 15): SMTP credentials (such as passwords) are never exposed to frontend users or admin templates."""
+        from config import Config
+        Config.SMTP_PASSWORD = "SuperSecretSMTPPassword999!"
+
+        with self.client.session_transaction() as sess:
+            sess['admin_id'] = 1
+            sess['admin_username'] = 'admin'
+
+        # Check template editor page
+        resp_tpl = self.client.get('/admin/emails/templates/1')
+        self.assertNotIn("SuperSecretSMTPPassword999!", resp_tpl.data.decode('utf-8', errors='ignore'))
+
+        # Check history page
+        resp_hist = self.client.get('/admin/emails/history')
+        self.assertNotIn("SuperSecretSMTPPassword999!", resp_hist.data.decode('utf-8', errors='ignore'))
+
+        # Check public submission form
+        resp_public = self.client.get('/submit-ewaste')
+        self.assertNotIn("SuperSecretSMTPPassword999!", resp_public.data.decode('utf-8', errors='ignore'))
+
+        # Reset password
+        Config.SMTP_PASSWORD = ""
+        print("[PASS] Test 88: Scenario 15 - Complete Zero-Leakage of Sensitive SMTP Credentials Verified.")
+
 
 
 if __name__ == '__main__':

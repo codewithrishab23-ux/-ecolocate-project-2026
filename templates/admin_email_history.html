@@ -1,0 +1,203 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Email History &amp; Logs | EcoLocate Admin{% endblock %}
+
+{% block content %}
+<div class="admin-content-header" style="margin-bottom: 2rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1 style="font-size: 1.75rem; font-weight: 800; color: #111827; margin-bottom: 0.25rem;">
+        Email History &amp; Delivery Audit Logs
+      </h1>
+      <p style="font-size: 0.9rem; color: #6b7280;">
+        Track all automated email attempts, verify delivery status, inspect errors, and retry failed transmissions.
+      </p>
+    </div>
+
+    <div>
+      <a href="{{ url_for('admin_email_templates') }}" class="btn btn-outline btn-sm">
+        &larr; Manage Email Templates
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- KPI Summary Cards -->
+<div class="admin-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Total Email Attempts</div>
+    <div style="font-size: 1.75rem; font-weight: 800; color: #111827; margin-top: 0.25rem;">{{ kpi_total }}</div>
+  </div>
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #10b981;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Sent (SMTP Accepted)</div>
+    <div style="font-size: 1.75rem; font-weight: 800; color: #059669; margin-top: 0.25rem;">{{ kpi_sent }}</div>
+  </div>
+  <div class="admin-stat-card card" style="padding: 1.25rem; border-radius: 8px; border-left: 4px solid #ef4444;">
+    <div style="font-size: 0.8rem; color: #6b7280; text-transform: uppercase; font-weight: 600;">Failed Transmissions</div>
+    <div style="font-size: 1.75rem; font-weight: 800; color: #dc2626; margin-top: 0.25rem;">{{ kpi_failed }}</div>
+  </div>
+</div>
+
+<!-- Filters Bar -->
+<div class="card" style="padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
+  <form method="GET" action="{{ url_for('admin_email_history') }}" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) 90px; gap: 0.75rem; align-items: flex-end;">
+    <div>
+      <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">User Category</label>
+      <select name="category" class="form-control" style="font-size: 0.88rem;">
+        <option value="all" {% if cat_filter == 'all' %}selected{% endif %}>All Categories</option>
+        <option value="sgt_student" {% if cat_filter == 'sgt_student' %}selected{% endif %}>SGT University Students</option>
+        <option value="general_user" {% if cat_filter == 'general_user' %}selected{% endif %}>General Users</option>
+      </select>
+    </div>
+
+    <div>
+      <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">Email Event Type</label>
+      <select name="type" class="form-control" style="font-size: 0.88rem;">
+        <option value="all" {% if type_filter == 'all' %}selected{% endif %}>All Event Types</option>
+        <option value="submission_received" {% if type_filter == 'submission_received' %}selected{% endif %}>Submission Received</option>
+        <option value="request_confirmed" {% if type_filter == 'request_confirmed' %}selected{% endif %}>Request Confirmed</option>
+      </select>
+    </div>
+
+    <div>
+      <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">Delivery Status</label>
+      <select name="status" class="form-control" style="font-size: 0.88rem;">
+        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
+        <option value="Sent" {% if status_filter == 'Sent' %}selected{% endif %}>Sent</option>
+        <option value="Failed" {% if status_filter == 'Failed' %}selected{% endif %}>Failed</option>
+        <option value="Pending" {% if status_filter == 'Pending' %}selected{% endif %}>Pending</option>
+      </select>
+    </div>
+
+    <div>
+      <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #4b5563; margin-bottom: 0.25rem;">Search</label>
+      <input type="text" name="q" class="form-control" placeholder="Email, Name, Code..." value="{{ q }}" style="font-size: 0.88rem;">
+    </div>
+
+    <div>
+      <button type="submit" class="btn btn-primary" style="width: 100%; font-size: 0.88rem; padding: 0.5rem 0;">Filter</button>
+    </div>
+  </form>
+</div>
+
+<!-- Logs Table -->
+<div class="card" style="padding: 1.5rem; border-radius: 8px;">
+  {% if logs %}
+    <div class="table-responsive">
+      <table class="table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 2px solid #e5e7eb; text-align: left; font-size: 0.82rem; color: #6b7280;">
+            <th style="padding: 0.75rem;">Timestamp</th>
+            <th style="padding: 0.75rem;">Recipient</th>
+            <th style="padding: 0.75rem;">Category</th>
+            <th style="padding: 0.75rem;">Event Type</th>
+            <th style="padding: 0.75rem;">Submission Ref</th>
+            <th style="padding: 0.75rem;">Subject</th>
+            <th style="padding: 0.75rem; text-align: center;">Status</th>
+            <th style="padding: 0.75rem; text-align: center;">Attempts</th>
+            <th style="padding: 0.75rem; text-align: right;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+            <tr style="border-bottom: 1px solid #f3f4f6; font-size: 0.88rem;">
+              <td style="padding: 0.75rem; color: #6b7280; font-size: 0.82rem;">
+                {{ log.created_at.strftime('%d %b %Y, %I:%M %p') if log.created_at else '' }}
+              </td>
+
+              <td style="padding: 0.75rem;">
+                <div style="font-weight: 600; color: #111827;">{{ log.recipient_name or 'User' }}</div>
+                <div style="font-size: 0.78rem; color: #6b7280;">{{ log.recipient_email }}</div>
+              </td>
+
+              <td style="padding: 0.75rem;">
+                {% if log.user_category == 'sgt_student' %}
+                  <span class="badge" style="background:#dbeafe; color:#1e40af; font-size:0.75rem; padding:0.15rem 0.4rem; border-radius:4px;">SGT Student</span>
+                {% else %}
+                  <span class="badge" style="background:#f3f4f6; color:#4b5563; font-size:0.75rem; padding:0.15rem 0.4rem; border-radius:4px;">General User</span>
+                {% endif %}
+              </td>
+
+              <td style="padding: 0.75rem; font-size: 0.82rem; color: #374151;">
+                {% if log.email_type == 'submission_received' %}
+                  Submission Received
+                {% elif log.email_type == 'request_confirmed' %}
+                  Request Confirmed
+                {% else %}
+                  {{ log.email_type }}
+                {% endif %}
+              </td>
+
+              <td style="padding: 0.75rem;">
+                {% if log.submission_code %}
+                  <a href="{{ url_for('admin_submission_detail', submission_id=log.submission_id) }}" style="font-weight: 700; color: #047857; text-decoration: none;">
+                    {{ log.submission_code }}
+                  </a>
+                {% else %}
+                  <span style="color: #9ca3af;">#{{ log.submission_id }}</span>
+                {% endif %}
+              </td>
+
+              <td style="padding: 0.75rem; color: #111827; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                {{ log.subject }}
+              </td>
+
+              <td style="padding: 0.75rem; text-align: center;">
+                {% if log.status == 'Sent' %}
+                  <span class="badge" style="background:#dcfce7; color:#15803d; font-size:0.75rem; padding:0.2rem 0.5rem; border-radius:9999px;">Sent</span>
+                {% elif log.status == 'Failed' %}
+                  <span class="badge" style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; padding:0.2rem 0.5rem; border-radius:9999px;" title="{{ log.error_message }}">Failed</span>
+                  {% if log.error_message %}
+                    <div style="font-size: 0.72rem; color: #ef4444; max-width: 140px; margin: 0.2rem auto 0 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                      {{ log.error_message }}
+                    </div>
+                  {% endif %}
+                {% else %}
+                  <span class="badge" style="background:#fef3c7; color:#b45309; font-size:0.75rem; padding:0.2rem 0.5rem; border-radius:9999px;">{{ log.status }}</span>
+                {% endif %}
+              </td>
+
+              <td style="padding: 0.75rem; text-align: center; font-weight: 600;">
+                {{ log.attempt_count }}
+              </td>
+
+              <td style="padding: 0.75rem; text-align: right;">
+                {% if log.status == 'Failed' or log.status == 'Pending' %}
+                  <form method="POST" action="{{ url_for('admin_email_retry', log_id=log.id) }}" style="display: inline-block; margin: 0;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-outline btn-sm" style="font-size: 0.78rem; padding: 0.25rem 0.5rem; color: #b91c1c; border-color: #fca5a5;">
+                      ↻ Retry
+                    </button>
+                  </form>
+                {% else %}
+                  <span style="color: #10b981; font-size: 0.8rem;">✓ Delivered</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; font-size: 0.88rem;">
+        <span style="color: #6b7280;">Showing page {{ page }} of {{ total_pages }} ({{ total_count }} total email logs)</span>
+        <div style="display: flex; gap: 0.5rem;">
+          {% if page > 1 %}
+            <a href="{{ url_for('admin_email_history', page=page-1, category=cat_filter, type=type_filter, status=status_filter, q=q) }}" class="btn btn-outline btn-sm">&larr; Prev</a>
+          {% endif %}
+          {% if page < total_pages %}
+            <a href="{{ url_for('admin_email_history', page=page+1, category=cat_filter, type=type_filter, status=status_filter, q=q) }}" class="btn btn-outline btn-sm">Next &rarr;</a>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+  {% else %}
+    <div style="padding: 2.5rem; text-align: center; color: #9ca3af;">
+      No email logs recorded matching the criteria.
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

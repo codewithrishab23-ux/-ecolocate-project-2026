@@ -51,3 +51,9 @@ htmlcov/
 *.swo
 .DS_Store
 Thumbs.db
+
+# User Uploads
+static/uploads/*
+!static/uploads/.gitkeep
+!static/uploads/submissions/.gitkeep
+

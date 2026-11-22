@@ -195,6 +195,8 @@ CREATE TABLE IF NOT EXISTS ewaste_submissions (
   points_approved TINYINT(1) NOT NULL DEFAULT 0,
   points_approved_at DATETIME NULL,
   points_approved_by INT NULL,
+  confirmed_at DATETIME NULL,
+  confirmed_by INT NULL,
   admin_notes TEXT NULL,
   rejection_reason TEXT NULL,
   manual_adjustment_reason TEXT NULL,
@@ -210,6 +212,7 @@ CREATE TABLE IF NOT EXISTS ewaste_submissions (
   INDEX idx_sub_city_state (state, city),
   CONSTRAINT fk_sub_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL,
   CONSTRAINT fk_sub_admin FOREIGN KEY (points_approved_by) REFERENCES admins (id) ON DELETE SET NULL,
+  CONSTRAINT fk_sub_confirmed_by FOREIGN KEY (confirmed_by) REFERENCES admins (id) ON DELETE SET NULL,
   CONSTRAINT fk_sub_recycler FOREIGN KEY (recycler_id) REFERENCES recyclers (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -296,3 +299,51 @@ CREATE TABLE IF NOT EXISTS collection_batches (
   INDEX idx_batch_status (status),
   CONSTRAINT fk_batch_recycler FOREIGN KEY (recycler_id) REFERENCES recyclers (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 16. Email Notification Templates (SGT Students and General Users)
+CREATE TABLE IF NOT EXISTS email_templates (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  template_key VARCHAR(100) NOT NULL UNIQUE,
+  template_name VARCHAR(150) NOT NULL,
+  user_category VARCHAR(50) NOT NULL,
+  email_type VARCHAR(50) NOT NULL,
+  subject VARCHAR(255) NOT NULL,
+  heading VARCHAR(255) NOT NULL,
+  greeting VARCHAR(255) NOT NULL,
+  confirmation_message TEXT NOT NULL,
+  body TEXT NOT NULL,
+  additional_instructions TEXT NULL,
+  closing_message TEXT NOT NULL,
+  sender_display_name VARCHAR(150) NOT NULL DEFAULT 'EcoLocate Team',
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_tpl_cat_type (user_category, email_type),
+  INDEX idx_tpl_key (template_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 17. Email Audit Logs & Delivery Tracking
+CREATE TABLE IF NOT EXISTS email_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  submission_id INT NULL,
+  recipient_email VARCHAR(150) NOT NULL,
+  recipient_name VARCHAR(150) NULL,
+  user_category VARCHAR(50) NOT NULL,
+  email_type VARCHAR(50) NOT NULL,
+  template_id INT NULL,
+  subject VARCHAR(255) NOT NULL,
+  status VARCHAR(50) NOT NULL DEFAULT 'Pending',
+  error_message TEXT NULL,
+  attempt_count INT NOT NULL DEFAULT 1,
+  sent_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_elog_sub (submission_id),
+  INDEX idx_elog_status (status),
+  INDEX idx_elog_type (email_type),
+  INDEX idx_elog_cat (user_category),
+  INDEX idx_elog_created (created_at),
+  CONSTRAINT fk_elog_sub FOREIGN KEY (submission_id) REFERENCES ewaste_submissions (id) ON DELETE SET NULL,
+  CONSTRAINT fk_elog_tpl FOREIGN KEY (template_id) REFERENCES email_templates (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

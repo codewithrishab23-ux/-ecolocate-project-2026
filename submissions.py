@@ -329,6 +329,14 @@ def register_submission_routes(app):
                 if user_id:
                     get_or_create_wallet(user_id)
 
+                # Automatic Email Notification on Submission Received
+                try:
+                    if email and str(email).strip():
+                        from email_service import send_submission_email
+                        send_submission_email(sub_id, email_type='submission_received')
+                except Exception as email_err:
+                    app.logger.warning(f"Submission received email dispatch warning: {email_err}")
+
                 flash(
                     f"E-Waste submission received successfully! Your tracking code is {submission_code}. "
                     f"Points will be credited to your account upon verification by our team.",

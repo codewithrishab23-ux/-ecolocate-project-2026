@@ -1,0 +1,275 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Edit {{ template.template_name }} | EcoLocate Admin{% endblock %}
+
+{% block content %}
+<div class="admin-content-header" style="margin-bottom: 2rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <a href="{{ url_for('admin_email_templates') }}" style="color: #059669; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem; margin-bottom: 0.5rem;">
+        &larr; Back to Email Templates
+      </a>
+      <h1 style="font-size: 1.75rem; font-weight: 800; color: #111827; margin-bottom: 0.25rem;">
+        {{ template.template_name }}
+      </h1>
+      <p style="font-size: 0.9rem; color: #6b7280;">
+        Category: <strong>{{ 'SGT University Student' if template.user_category == 'sgt_student' else 'General User / Other University' }}</strong> |
+        Event: <strong>{{ 'Submission Received' if template.email_type == 'submission_received' else 'Request Confirmed' }}</strong>
+      </p>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem;">
+      <button type="button" id="previewBtn" class="btn btn-outline btn-sm">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.25rem;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+        </svg>
+        Preview Email
+      </button>
+      <form method="POST" action="{{ url_for('admin_email_template_edit', template_id=template.id) }}" style="margin: 0;" onsubmit="return confirm('Restore this email template to factory default? Any custom edits will be reverted.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="action" value="restore_default"/>
+        <button type="submit" class="btn btn-ghost btn-sm" style="color: #6b7280;">
+          Restore Default Template
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem;">
+
+  <!-- Main Column: Email Editor Form -->
+  <div>
+    <form method="POST" action="{{ url_for('admin_email_template_edit', template_id=template.id) }}" id="templateEditForm" class="card" style="padding: 1.75rem; border-radius: 10px; margin-bottom: 2rem;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="action" value="save"/>
+
+      <div style="margin-bottom: 1.25rem;">
+        <label for="subject" style="display: block; font-weight: 700; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+          Email Subject Line <span style="color: #ef4444;">*</span>
+        </label>
+        <input type="text" id="subject" name="subject" class="form-control" value="{{ template.subject }}" required style="font-weight: 600;">
+        <small style="color: #6b7280; font-size: 0.78rem;">Supports placeholders like <code>&#123;&#123;submission_id&#125;&#125;</code>, <code>&#123;&#123;user_name&#125;&#125;</code></small>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+        <div>
+          <label for="sender_display_name" style="display: block; font-weight: 700; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+            Sender Display Name <span style="color: #ef4444;">*</span>
+          </label>
+          <input type="text" id="sender_display_name" name="sender_display_name" class="form-control" value="{{ template.sender_display_name }}" required>
+        </div>
+
+        <div>
+          <label for="heading" style="display: block; font-weight: 700; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+            Email Top Banner Heading <span style="color: #ef4444;">*</span>
+          </label>
+          <input type="text" id="heading" name="heading" class="form-control" value="{{ template.heading }}" required>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <label for="greeting" style="display: block; font-weight: 700; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+          Salutation / Greeting <span style="color: #ef4444;">*</span>
+        </label>
+        <input type="text" id="greeting" name="greeting" class="form-control" value="{{ template.greeting }}" required>
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <label for="confirmation_message" style="display: block; font-weight: 700; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+          Prominent Callout / Status Message <span style="color: #ef4444;">*</span>
+        </label>
+        <textarea id="confirmation_message" name="confirmation_message" class="form-control" rows="2" required>{{ template.confirmation_message }}</textarea>
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+          <label for="body" style="font-weight: 700; font-size: 0.88rem; color: #374151; margin: 0;">
+            Main Email Body Content <span style="color: #ef4444;">*</span>
+          </label>
+          <div style="font-size: 0.78rem; color: #6b7280;">
+            Plain text or HTML tags allowed (<code>&lt;strong&gt;</code>, <code>&lt;br&gt;</code>, <code>&lt;ul&gt;</code>)
+          </div>
+        </div>
+        <textarea id="body" name="body" class="form-control" rows="6" required style="font-family: inherit; line-height: 1.6;">{{ template.body }}</textarea>
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <label for="additional_instructions" style="display: block; font-weight: 700; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+          Additional Instructions / Pickup Notes <small style="color: #9ca3af; font-weight: 400;">(Optional alert box)</small>
+        </label>
+        <textarea id="additional_instructions" name="additional_instructions" class="form-control" rows="2">{{ template.additional_instructions or '' }}</textarea>
+      </div>
+
+      <div style="margin-bottom: 1.5rem;">
+        <label for="closing_message" style="display: block; font-weight: 700; font-size: 0.88rem; color: #374151; margin-bottom: 0.35rem;">
+          Sign-Off / Closing Message <span style="color: #ef4444;">*</span>
+        </label>
+        <textarea id="closing_message" name="closing_message" class="form-control" rows="3" required>{{ template.closing_message }}</textarea>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e5e7eb; padding-top: 1.25rem;">
+        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; cursor: pointer;">
+          <input type="checkbox" name="is_active" value="1" {% if template.is_active %}checked{% endif %} style="accent-color: #10b981; width: 16px; height: 16px;">
+          <span>Template is active and available for dispatch</span>
+        </label>
+
+        <button type="submit" class="btn btn-primary" style="font-weight: 700; padding: 0.65rem 1.75rem;">
+          Save Template Changes
+        </button>
+      </div>
+    </form>
+
+    <!-- Send Test Email Section -->
+    <div class="card" style="padding: 1.5rem; border-radius: 10px; border-left: 4px solid #3b82f6;">
+      <h3 style="font-size: 1.1rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.35rem;">
+        Send Live Test Email
+      </h3>
+      <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 1rem;">
+        Dispatch a simulated email with sample data to your personal inbox to verify styling and layout.
+      </p>
+
+      <form method="POST" action="{{ url_for('admin_email_template_edit', template_id=template.id) }}" style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="action" value="send_test"/>
+
+        <div style="flex: 1; min-width: 240px;">
+          <input type="email" name="test_recipient" class="form-control" placeholder="Enter recipient email (e.g. your_email@domain.com)" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="background: #2563eb; border-color: #2563eb; font-weight: 600;">
+          Send Test Email
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Sidebar: Dynamic Placeholders Guide -->
+  <div>
+    <div class="card" style="padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem;">
+      <h3 style="font-size: 1.1rem; font-weight: 700; color: #111827; margin-bottom: 0.5rem;">
+        Dynamic Placeholders
+      </h3>
+      <p style="font-size: 0.82rem; color: #6b7280; margin-bottom: 1rem;">
+        Click any placeholder to copy it to your clipboard.
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+        {% set placeholders = [
+          ('{{user_name}}', 'Submitter name or student name'),
+          ('{{user_email}}', 'Submitter email address'),
+          ('{{phone_number}}', 'Contact phone number'),
+          ('{{university_name}}', 'University / College name'),
+          ('{{roll_number}}', 'Student roll number'),
+          ('{{submission_id}}', 'Unique tracking reference ID'),
+          ('{{submission_date}}', 'Date and time of submission'),
+          ('{{waste_category}}', 'List of submitted item categories'),
+          ('{{total_quantity}}', 'Total quantity of items'),
+          ('{{submission_status}}', 'Status (Pending / Confirmed)'),
+          ('{{admin_name}}', 'Name of administrator')
+        ] %}
+
+        {% for ph, desc in placeholders %}
+          <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.5rem 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <code class="copy-tag" data-tag="{{ ph }}" style="color: #047857; font-weight: 700; font-size: 0.85rem; cursor: pointer;" title="Click to copy">
+                {{ ph }}
+              </code>
+              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.15rem;">{{ desc }}</div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm copy-btn" data-tag="{{ ph }}" style="font-size: 0.75rem; padding: 0.2rem 0.4rem; color: #6b7280;">
+              Copy
+            </button>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Email Live Preview Modal -->
+<div id="previewModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center; padding: 1.5rem;">
+  <div style="background: white; width: 100%; max-width: 720px; max-height: 90vh; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);">
+    <div style="padding: 1rem 1.5rem; background: #0e3b2e; color: white; display: flex; justify-content: space-between; align-items: center;">
+      <h4 style="margin: 0; font-size: 1rem; font-weight: 700;">Live Email Preview</h4>
+      <button type="button" id="closePreviewBtn" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+    </div>
+    <div style="padding: 0.75rem 1.5rem; background: #f3f4f6; border-bottom: 1px solid #e5e7eb; font-size: 0.85rem;">
+      <strong>Simulated Subject:</strong> <span id="previewSubjectText" style="color: #047857; font-weight: 600;"></span>
+    </div>
+    <div style="flex: 1; overflow-y: auto; padding: 1.5rem; background: #e5e7eb;">
+      <div id="previewHtmlContainer" style="background: transparent;"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Copy placeholder tag to clipboard
+  document.querySelectorAll('.copy-btn, .copy-tag').forEach(el => {
+    el.addEventListener('click', function() {
+      const tag = this.dataset.tag;
+      navigator.clipboard.writeText(tag).then(() => {
+        const origText = this.textContent;
+        this.textContent = 'Copied!';
+        setTimeout(() => { this.textContent = origText; }, 1500);
+      });
+    });
+  });
+
+  // Live Email Preview Modal via AJAX
+  const previewBtn = document.getElementById('previewBtn');
+  const previewModal = document.getElementById('previewModal');
+  const closePreviewBtn = document.getElementById('closePreviewBtn');
+  const previewSubjectText = document.getElementById('previewSubjectText');
+  const previewHtmlContainer = document.getElementById('previewHtmlContainer');
+
+  previewBtn.addEventListener('click', function() {
+    const payload = {
+      user_category: '{{ template.user_category }}',
+      email_type: '{{ template.email_type }}',
+      subject: document.getElementById('subject').value,
+      heading: document.getElementById('heading').value,
+      greeting: document.getElementById('greeting').value,
+      confirmation_message: document.getElementById('confirmation_message').value,
+      body: document.getElementById('body').value,
+      additional_instructions: document.getElementById('additional_instructions').value,
+      closing_message: document.getElementById('closing_message').value,
+      sender_display_name: document.getElementById('sender_display_name').value
+    };
+
+    fetch('{{ url_for("admin_email_preview") }}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': '{{ csrf_token() }}'
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        previewSubjectText.textContent = data.subject;
+        previewHtmlContainer.innerHTML = data.html;
+        previewModal.style.display = 'flex';
+      }
+    })
+    .catch(err => {
+      alert('Could not render preview: ' + err);
+    });
+  });
+
+  closePreviewBtn.addEventListener('click', () => {
+    previewModal.style.display = 'none';
+  });
+
+  previewModal.addEventListener('click', (e) => {
+    if (e.target === previewModal) {
+      previewModal.style.display = 'none';
+    }
+  });
+</script>
+{% endblock %}

@@ -1241,6 +1241,47 @@ def register_admin_routes(app):
                 flash("Recycler assignment and collection status updated.", "success")
                 return redirect(url_for('admin_submission_detail', submission_id=submission_id))
 
+            elif action == 'confirm_request':
+                # 1. Update submission status to 'confirmed', record admin ID and confirmation timestamp
+                execute_query(
+                    """
+                    UPDATE ewaste_submissions
+                    SET status = 'confirmed',
+                        confirmed_at = NOW(),
+                        confirmed_by = %s
+                    WHERE id = %s
+                    """,
+                    (session.get('admin_id'), submission_id),
+                    commit=True
+                )
+
+                # 2. Automatically dispatch confirmation email using correct template
+                from email_service import send_submission_email
+                admin_name = session.get('admin_username') or 'Administrator'
+                email_ok, email_msg, log_id = send_submission_email(
+                    submission_id=submission_id,
+                    email_type='request_confirmed',
+                    admin_name=admin_name
+                )
+
+                if email_ok:
+                    flash(f"Submission {sub['submission_code']} has been confirmed! Confirmation email sent to {sub.get('email')}.", "success")
+                else:
+                    flash(f"Submission {sub['submission_code']} status set to Confirmed. Note: Confirmation email delivery failed ({email_msg}). You can retry sending below.", "warning")
+
+                return redirect(url_for('admin_submission_detail', submission_id=submission_id))
+
+            elif action == 'retry_email':
+                log_id_raw = request.form.get('log_id')
+                if log_id_raw:
+                    from email_service import retry_failed_email_log
+                    ok, msg = retry_failed_email_log(int(log_id_raw))
+                    if ok:
+                        flash("Email re-sent successfully.", "success")
+                    else:
+                        flash(f"Email retry failed: {msg}", "error")
+                return redirect(url_for('admin_submission_detail', submission_id=submission_id))
+
         items = execute_query(
             "SELECT * FROM ewaste_submission_items WHERE submission_id = %s ORDER BY id ASC",
             (submission_id,),
@@ -1262,6 +1303,19 @@ def register_admin_routes(app):
         accepted_count = sum(i['accepted_quantity'] for i in items if i['status'] != 'rejected')
         preview_points = calculate_points_for_quantity(accepted_count)
 
+        # Related email logs for this submission
+        submission_emails = execute_query(
+            """
+            SELECT l.*, t.template_name
+            FROM email_logs l
+            LEFT JOIN email_templates t ON l.template_id = t.id
+            WHERE l.submission_id = %s
+            ORDER BY l.created_at DESC
+            """,
+            (submission_id,),
+            fetchall=True
+        ) or []
+
         return render_template(
             'admin_submission_detail.html',
             submission=sub,
@@ -1269,7 +1323,8 @@ def register_admin_routes(app):
             images=images,
             recyclers=recyclers,
             accepted_count=accepted_count,
-            preview_points=preview_points
+            preview_points=preview_points,
+            emails=submission_emails
         )
 
     @app.route('/admin/submissions/export-csv')
@@ -1673,4 +1728,277 @@ def register_admin_routes(app):
 
         recyclers = execute_query("SELECT * FROM recyclers ORDER BY id ASC", fetchall=True) or []
         return render_template('admin_recyclers.html', recyclers=recyclers)
+
+    # ==========================================================================
+    # 11. Email Notification & Template Management System (Phase 10)
+    # ==========================================================================
+
+    @app.route('/admin/emails/templates')
+    @admin_required
+    def admin_email_templates():
+        """List and manage all email templates for SGT students and general users."""
+        templates = execute_query(
+            "SELECT * FROM email_templates ORDER BY user_category ASC, email_type ASC",
+            fetchall=True
+        ) or []
+
+        # Count stats from logs
+        total_logs = execute_query("SELECT COUNT(*) AS total FROM email_logs", fetchone=True)
+        sent_logs = execute_query("SELECT COUNT(*) AS total FROM email_logs WHERE status = 'Sent'", fetchone=True)
+        failed_logs = execute_query("SELECT COUNT(*) AS total FROM email_logs WHERE status = 'Failed'", fetchone=True)
+
+        return render_template(
+            'admin_email_templates.html',
+            templates=templates,
+            total_logs=total_logs['total'] if total_logs else 0,
+            sent_logs=sent_logs['total'] if sent_logs else 0,
+            failed_logs=failed_logs['total'] if failed_logs else 0
+        )
+
+    @app.route('/admin/emails/templates/<int:template_id>', methods=['GET', 'POST'])
+    @admin_required
+    def admin_email_template_edit(template_id):
+        """Edit email template, preview live formatting, restore default, or send test email."""
+        tpl = execute_query("SELECT * FROM email_templates WHERE id = %s", (template_id,), fetchone=True)
+        if not tpl:
+            flash("Email template not found.", "error")
+            return redirect(url_for('admin_email_templates'))
+
+        if request.method == 'POST':
+            action = request.form.get('action', 'save')
+
+            if action == 'save':
+                subject = request.form.get('subject', '').strip()
+                heading = request.form.get('heading', '').strip()
+                greeting = request.form.get('greeting', '').strip()
+                confirmation_msg = request.form.get('confirmation_message', '').strip()
+                body = request.form.get('body', '').strip()
+                instructions = request.form.get('additional_instructions', '').strip() or None
+                closing = request.form.get('closing_message', '').strip()
+                sender_display_name = request.form.get('sender_display_name', 'EcoLocate Support').strip()
+                is_active = 1 if request.form.get('is_active') in ('1', 'on', 'true') else 0
+
+                if not subject or not heading or not body:
+                    flash("Subject, Heading, and Email Body are required fields.", "error")
+                    return redirect(url_for('admin_email_template_edit', template_id=template_id))
+
+                execute_query(
+                    """
+                    UPDATE email_templates
+                    SET subject = %s, heading = %s, greeting = %s,
+                        confirmation_message = %s, body = %s,
+                        additional_instructions = %s, closing_message = %s,
+                        sender_display_name = %s, is_active = %s
+                    WHERE id = %s
+                    """,
+                    (
+                        subject, heading, greeting, confirmation_msg, body,
+                        instructions, closing, sender_display_name, is_active,
+                        template_id
+                    ),
+                    commit=True
+                )
+                flash(f"Email template '{tpl['template_name']}' has been updated and saved successfully.", "success")
+                return redirect(url_for('admin_email_template_edit', template_id=template_id))
+
+            elif action == 'restore_default':
+                from email_service import restore_default_template_definition
+                ok, msg = restore_default_template_definition(tpl['template_key'])
+                if ok:
+                    flash(msg, "info")
+                else:
+                    flash(msg, "error")
+                return redirect(url_for('admin_email_template_edit', template_id=template_id))
+
+            elif action == 'send_test':
+                test_recipient = request.form.get('test_recipient', '').strip()
+                if not test_recipient:
+                    flash("Please provide a valid test recipient email address.", "error")
+                    return redirect(url_for('admin_email_template_edit', template_id=template_id))
+
+                from email_service import (
+                    substitute_variables, build_full_email_html, send_email_via_smtp
+                )
+                from datetime import datetime
+
+                sample_context = {
+                    'user_name': 'Yogesh Sharma (Test)' if tpl['user_category'] == 'sgt_student' else 'Rajesh Kumar (Test)',
+                    'user_email': test_recipient,
+                    'phone_number': '+91 98765 43210',
+                    'university_name': 'SGT University, Gurugram' if tpl['user_category'] == 'sgt_student' else 'Other University',
+                    'roll_number': '241306039' if tpl['user_category'] == 'sgt_student' else 'N/A',
+                    'submission_id': 'SUB-2026-TEST01',
+                    'submission_date': datetime.now().strftime('%d %B %Y, %I:%M %p'),
+                    'waste_category': 'Mobile phones, Laptops, Batteries',
+                    'total_quantity': '3',
+                    'submission_status': 'Confirmed' if tpl['email_type'] == 'request_confirmed' else 'Pending',
+                    'admin_name': session.get('admin_username') or 'Administrator'
+                }
+
+                rendered_fields = {
+                    'heading': substitute_variables(tpl['heading'], sample_context),
+                    'greeting': substitute_variables(tpl['greeting'], sample_context),
+                    'confirmation_message': substitute_variables(tpl['confirmation_message'], sample_context),
+                    'body': substitute_variables(tpl['body'], sample_context),
+                    'additional_instructions': substitute_variables(tpl.get('additional_instructions') or '', sample_context),
+                    'closing_message': substitute_variables(tpl['closing_message'], sample_context),
+                    'sender_display_name': substitute_variables(tpl.get('sender_display_name') or 'EcoLocate Support', sample_context)
+                }
+                rendered_subject = substitute_variables(f"[TEST EMAIL] {tpl['subject']}", sample_context)
+
+                html_content, plain_content = build_full_email_html(rendered_fields, sample_context)
+
+                success, status_msg = send_email_via_smtp(
+                    to_email=test_recipient,
+                    subject=rendered_subject,
+                    html_body=html_content,
+                    plain_text=plain_content,
+                    sender_display_name=rendered_fields['sender_display_name']
+                )
+
+                if success:
+                    flash(f"Test email successfully sent to {test_recipient}!", "success")
+                else:
+                    flash(f"Test email delivery failed: {status_msg}", "error")
+
+                return redirect(url_for('admin_email_template_edit', template_id=template_id))
+
+        # Re-fetch template to show latest saved data
+        tpl = execute_query("SELECT * FROM email_templates WHERE id = %s", (template_id,), fetchone=True)
+        return render_template('admin_email_template_edit.html', template=tpl)
+
+    @app.route('/admin/emails/preview', methods=['POST'])
+    @admin_required
+    def admin_email_preview():
+        """Render live HTML preview with dynamic placeholder replacements for editor."""
+        data = request.get_json(silent=True) or request.form
+        user_cat = data.get('user_category', 'general_user')
+        email_type = data.get('email_type', 'submission_received')
+
+        from email_service import substitute_variables, build_full_email_html
+        from datetime import datetime
+
+        sample_context = {
+            'user_name': 'Yogesh Sharma' if user_cat == 'sgt_student' else 'Rajesh Kumar',
+            'user_email': 'yogesh@sgtuniversity.ac.in' if user_cat == 'sgt_student' else 'user@example.com',
+            'phone_number': '+91 98765 43210',
+            'university_name': 'SGT University, Gurugram' if user_cat == 'sgt_student' else 'Delhi University',
+            'roll_number': '241306039' if user_cat == 'sgt_student' else 'N/A',
+            'submission_id': 'SUB-2026-DEMO01',
+            'submission_date': datetime.now().strftime('%d %B %Y, %I:%M %p'),
+            'waste_category': 'Mobile phones, Laptops, Batteries',
+            'total_quantity': '3',
+            'submission_status': 'Confirmed' if email_type == 'request_confirmed' else 'Pending',
+            'admin_name': session.get('admin_username') or 'Administrator'
+        }
+
+        rendered_fields = {
+            'heading': substitute_variables(data.get('heading', ''), sample_context),
+            'greeting': substitute_variables(data.get('greeting', ''), sample_context),
+            'confirmation_message': substitute_variables(data.get('confirmation_message', ''), sample_context),
+            'body': substitute_variables(data.get('body', ''), sample_context),
+            'additional_instructions': substitute_variables(data.get('additional_instructions', ''), sample_context),
+            'closing_message': substitute_variables(data.get('closing_message', ''), sample_context),
+            'sender_display_name': substitute_variables(data.get('sender_display_name', 'EcoLocate Support'), sample_context)
+        }
+        rendered_subject = substitute_variables(data.get('subject', ''), sample_context)
+        html_content, _ = build_full_email_html(rendered_fields, sample_context)
+
+        return jsonify({
+            'success': True,
+            'subject': rendered_subject,
+            'html': html_content
+        })
+
+    @app.route('/admin/emails/history')
+    @admin_required
+    def admin_email_history():
+        """View all logged email dispatch attempts with filters and retry options."""
+        status_filter = request.args.get('status', 'all').strip()
+        cat_filter = request.args.get('category', 'all').strip()
+        type_filter = request.args.get('type', 'all').strip()
+        q = request.args.get('q', '').strip()
+
+        try:
+            page = max(1, int(request.args.get('page', 1)))
+        except (ValueError, TypeError):
+            page = 1
+        limit = 20
+        offset = (page - 1) * limit
+
+        where_clauses = ["1=1"]
+        params = []
+
+        if status_filter and status_filter != 'all':
+            where_clauses.append("l.status = %s")
+            params.append(status_filter)
+
+        if cat_filter and cat_filter != 'all':
+            where_clauses.append("l.user_category = %s")
+            params.append(cat_filter)
+
+        if type_filter and type_filter != 'all':
+            where_clauses.append("l.email_type = %s")
+            params.append(type_filter)
+
+        if q:
+            like_term = f"%{q}%"
+            where_clauses.append("(l.recipient_email LIKE %s OR l.recipient_name LIKE %s OR l.subject LIKE %s OR s.submission_code LIKE %s)")
+            params.extend([like_term, like_term, like_term, like_term])
+
+        where_sql = " AND ".join(where_clauses)
+
+        count_sql = f"""
+        SELECT COUNT(*) AS total
+        FROM email_logs l
+        LEFT JOIN ewaste_submissions s ON l.submission_id = s.id
+        WHERE {where_sql}
+        """
+        count_row = execute_query(count_sql, tuple(params), fetchone=True)
+        total_count = count_row['total'] if count_row else 0
+
+        data_sql = f"""
+        SELECT l.*, s.submission_code, t.template_name
+        FROM email_logs l
+        LEFT JOIN ewaste_submissions s ON l.submission_id = s.id
+        LEFT JOIN email_templates t ON l.template_id = t.id
+        WHERE {where_sql}
+        ORDER BY l.id DESC
+        LIMIT %s OFFSET %s
+        """
+        data_params = list(params) + [limit, offset]
+        logs = execute_query(data_sql, tuple(data_params), fetchall=True) or []
+        total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
+
+        # Summary KPIs
+        total_attempts = execute_query("SELECT COUNT(*) AS total FROM email_logs", fetchone=True)
+        sent_count = execute_query("SELECT COUNT(*) AS total FROM email_logs WHERE status = 'Sent'", fetchone=True)
+        failed_count = execute_query("SELECT COUNT(*) AS total FROM email_logs WHERE status = 'Failed'", fetchone=True)
+
+        return render_template(
+            'admin_email_history.html',
+            logs=logs,
+            total_count=total_count,
+            page=page,
+            total_pages=total_pages,
+            status_filter=status_filter,
+            cat_filter=cat_filter,
+            type_filter=type_filter,
+            q=q,
+            kpi_total=total_attempts['total'] if total_attempts else 0,
+            kpi_sent=sent_count['total'] if sent_count else 0,
+            kpi_failed=failed_count['total'] if failed_count else 0
+        )
+
+    @app.route('/admin/emails/retry/<int:log_id>', methods=['POST'])
+    @admin_required
+    def admin_email_retry(log_id):
+        """Retry a failed or pending email log entry."""
+        from email_service import retry_failed_email_log
+        success, msg = retry_failed_email_log(log_id)
+        if success:
+            flash("Email re-sent successfully via SMTP.", "success")
+        else:
+            flash(f"Email retry attempt failed: {msg}", "error")
+        return redirect(url_for('admin_email_history'))
 

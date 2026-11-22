@@ -17,15 +17,33 @@
       </p>
     </div>
 
-    <div>
-      {% if submission.points_approved %}
+    <div style="display: flex; gap: 0.75rem; align-items: center;">
+      {% if submission.status == 'confirmed' %}
+        <span class="badge" style="background: #0284c7; color: white; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.88rem;">
+          ✓ Request Confirmed
+        </span>
+      {% elif submission.status in ['verified', 'collected'] %}
         <span class="badge" style="background: #10b981; color: white; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.88rem;">
-          Points Approved ({{ submission.points_awarded }} pts)
+          {{ submission.status|capitalize }}
+        </span>
+      {% elif submission.status == 'rejected' %}
+        <span class="badge" style="background: #ef4444; color: white; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.88rem;">
+          Rejected
         </span>
       {% else %}
         <span class="badge" style="background: #f59e0b; color: white; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.88rem;">
-          Pending Verification
+          Pending Review
         </span>
+      {% endif %}
+
+      {% if submission.status != 'confirmed' and submission.status != 'collected' and submission.status != 'rejected' %}
+        <form method="POST" action="{{ url_for('admin_submission_detail', submission_id=submission.id) }}" style="display: inline-block; margin: 0;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <input type="hidden" name="action" value="confirm_request"/>
+          <button type="submit" class="btn btn-primary btn-sm" style="background: #0284c7; border-color: #0284c7; font-weight: 700; padding: 0.5rem 1.25rem;">
+            ✓ Confirm Request
+          </button>
+        </form>
       {% endif %}
     </div>
   </div>
@@ -237,7 +255,7 @@
 
     <!-- Images Gallery -->
     {% if images %}
-      <div class="card" style="padding: 1.75rem; border-radius: 10px;">
+      <div class="card" style="padding: 1.75rem; border-radius: 10px; margin-bottom: 2rem;">
         <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin-bottom: 1rem;">
           Submitted Photos ({{ images|length }})
         </h3>
@@ -255,6 +273,85 @@
         </div>
       </div>
     {% endif %}
+
+    <!-- Email Notifications Log for this Submission -->
+    <div class="card" style="padding: 1.75rem; border-radius: 10px; margin-bottom: 2rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="font-size: 1.15rem; font-weight: 700; color: #111827; margin: 0;">
+          Email Notifications History ({{ emails|length }})
+        </h3>
+        <a href="{{ url_for('admin_email_history') }}" style="font-size: 0.82rem; color: #047857; text-decoration: none;">
+          View All Email Logs &rarr;
+        </a>
+      </div>
+
+      {% if emails %}
+        <div class="table-responsive">
+          <table class="table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 2px solid #e5e7eb; text-align: left; font-size: 0.8rem; color: #6b7280;">
+                <th style="padding: 0.5rem;">Event Type</th>
+                <th style="padding: 0.5rem;">Recipient</th>
+                <th style="padding: 0.5rem;">Subject</th>
+                <th style="padding: 0.5rem;">Status</th>
+                <th style="padding: 0.5rem;">Date</th>
+                <th style="padding: 0.5rem; text-align: right;">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for em in emails %}
+                <tr style="border-bottom: 1px solid #f3f4f6; font-size: 0.85rem;">
+                  <td style="padding: 0.5rem; font-weight: 600;">
+                    {% if em.email_type == 'submission_received' %}
+                      Submission Received
+                    {% elif em.email_type == 'request_confirmed' %}
+                      Request Confirmed
+                    {% else %}
+                      {{ em.email_type }}
+                    {% endif %}
+                  </td>
+                  <td style="padding: 0.5rem; color: #4b5563;">{{ em.recipient_email }}</td>
+                  <td style="padding: 0.5rem; color: #111827;">{{ em.subject }}</td>
+                  <td style="padding: 0.5rem;">
+                    {% if em.status == 'Sent' %}
+                      <span class="badge" style="background:#dcfce7; color:#15803d; font-size:0.75rem;">Sent</span>
+                    {% elif em.status == 'Failed' %}
+                      <span class="badge" style="background:#fee2e2; color:#b91c1c; font-size:0.75rem;" title="{{ em.error_message }}">Failed</span>
+                      {% if em.error_message %}
+                        <div style="font-size: 0.72rem; color: #ef4444; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                          {{ em.error_message }}
+                        </div>
+                      {% endif %}
+                    {% else %}
+                      <span class="badge" style="background:#fef3c7; color:#b45309; font-size:0.75rem;">{{ em.status }}</span>
+                    {% endif %}
+                  </td>
+                  <td style="padding: 0.5rem; color: #6b7280; font-size: 0.78rem;">
+                    {{ em.created_at.strftime('%d %b %Y, %I:%M %p') if em.created_at else '' }}
+                  </td>
+                  <td style="padding: 0.5rem; text-align: right;">
+                    {% if em.status == 'Failed' %}
+                      <form method="POST" action="{{ url_for('admin_submission_detail', submission_id=submission.id) }}" style="display: inline-block; margin: 0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" name="action" value="retry_email"/>
+                        <input type="hidden" name="log_id" value="{{ em.id }}"/>
+                        <button type="submit" class="btn btn-outline btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; color: #b91c1c; border-color: #fca5a5;">
+                          ↻ Retry Email
+                        </button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div style="padding: 1.5rem; text-align: center; color: #9ca3af; font-size: 0.88rem;">
+          No email notifications logged for this submission yet.
+        </div>
+      {% endif %}
+    </div>
 
   </div>
 

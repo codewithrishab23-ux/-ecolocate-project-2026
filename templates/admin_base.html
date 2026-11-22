@@ -121,6 +121,21 @@
           <span>Device Categories</span>
         </a>
 
+        <div class="admin-nav-section">Email Management</div>
+        <a href="{{ url_for('admin_email_templates') }}" class="admin-nav-link {% if request.endpoint in ['admin_email_templates', 'admin_email_template_edit'] %}active{% endif %}">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+          </svg>
+          <span>Email Templates</span>
+        </a>
+
+        <a href="{{ url_for('admin_email_history') }}" class="admin-nav-link {% if request.endpoint == 'admin_email_history' %}active{% endif %}">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <span>Email History &amp; Logs</span>
+        </a>
+
         <div class="admin-nav-section">Account &amp; System</div>
         <a href="{{ url_for('admin_profile') }}" class="admin-nav-link {% if request.endpoint == 'admin_profile' %}active{% endif %}">
           <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -23,7 +23,9 @@ TABLES_TO_BACKUP = [
     'ewaste_submission_images',
     'user_points_wallets',
     'points_transactions',
-    'collection_batches'
+    'collection_batches',
+    'email_templates',
+    'email_logs'
 ]
 
 def default_json_serializer(obj):
