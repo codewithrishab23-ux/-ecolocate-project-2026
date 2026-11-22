@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 basedir = os.path.abspath(os.path.dirname(__file__))
 env_file = os.path.join(basedir, '.env')
 if os.path.exists(env_file):
-    load_dotenv(env_file)
+    load_dotenv(env_file, override=True)
 else:
-    load_dotenv()
+    load_dotenv(override=True)
 
 class Config:
     """Base application configuration."""
@@ -42,4 +42,5 @@ class Config:
     SMTP_USERNAME = os.environ.get('SMTP_USERNAME', '')
     SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
     SMTP_USE_TLS = os.environ.get('SMTP_USE_TLS', 'True').lower() in ('true', '1', 'yes')
-    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'EcoLocate <noreply@ecolocate.in>')
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', '')
+    MAIL_SENDER_NAME = os.environ.get('MAIL_SENDER_NAME', 'EcoLocate Team')

@@ -5,11 +5,13 @@ HTML email rendering, SMTP delivery with defensive error handling,
 email logging, and failed email retries.
 """
 
+import os
 import smtplib
 import re
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr, parseaddr
 from flask import current_app
 from config import Config
 from db import execute_query
@@ -281,18 +283,28 @@ def send_email_via_smtp(to_email, subject, html_body, plain_text=None, sender_di
         return True, "Sent"
 
     # Read SMTP credentials safely from Config / environment
-    smtp_host = Config.SMTP_HOST or ''
-    smtp_port = Config.SMTP_PORT or 587
-    smtp_user = Config.SMTP_USERNAME or ''
-    smtp_pass = Config.SMTP_PASSWORD or ''
-    use_tls = Config.SMTP_USE_TLS
-    default_sender = Config.MAIL_DEFAULT_SENDER or 'EcoLocate <noreply@ecolocate.in>'
+    smtp_host = os.environ.get('SMTP_HOST') or getattr(Config, 'SMTP_HOST', '')
+    smtp_port = int(os.environ.get('SMTP_PORT') or getattr(Config, 'SMTP_PORT', 587))
+    smtp_user = os.environ.get('SMTP_USERNAME') or getattr(Config, 'SMTP_USERNAME', '')
+    smtp_pass = os.environ.get('SMTP_PASSWORD') or getattr(Config, 'SMTP_PASSWORD', '')
+
+    use_tls_env = os.environ.get('SMTP_USE_TLS')
+    if use_tls_env is not None:
+        use_tls = str(use_tls_env).strip().lower() in ('true', '1', 'yes')
+    else:
+        use_tls = getattr(Config, 'SMTP_USE_TLS', True)
+
+    default_sender = os.environ.get('MAIL_DEFAULT_SENDER') or getattr(Config, 'MAIL_DEFAULT_SENDER', '')
+    sender_name_env = os.environ.get('MAIL_SENDER_NAME') or getattr(Config, 'MAIL_SENDER_NAME', 'EcoLocate Team')
 
     if not smtp_host:
         return False, "SMTP server not configured (SMTP_HOST is empty in .env)"
 
-    # Construct MIME message
-    sender_header = f'"{sender_display_name}" <{smtp_user or "noreply@ecolocate.in"}>' if smtp_user else default_sender
+    # Format From header with EcoLocate Team sender name
+    parsed_name, parsed_email = parseaddr(default_sender)
+    from_email = parsed_email if parsed_email else (smtp_user or "noreply@ecolocate.in")
+    effective_name = sender_name_env or sender_display_name or parsed_name or "EcoLocate Team"
+    sender_header = formataddr((effective_name, from_email))
 
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
@@ -304,7 +316,7 @@ def send_email_via_smtp(to_email, subject, html_body, plain_text=None, sender_di
     msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
     try:
-        server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
+        server = smtplib.SMTP(smtp_host, smtp_port, timeout=15)
         server.ehlo()
         if use_tls:
             server.starttls()
@@ -312,7 +324,8 @@ def send_email_via_smtp(to_email, subject, html_body, plain_text=None, sender_di
         if smtp_user and smtp_pass:
             server.login(smtp_user, smtp_pass)
 
-        server.sendmail(msg['From'], [to_email], msg.as_string())
+        # Envelope sender should be clean email address (from_email)
+        server.sendmail(from_email, [to_email], msg.as_string())
         server.quit()
         return True, "Sent"
 
